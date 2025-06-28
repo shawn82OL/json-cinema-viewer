@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image } from 'lucide-react';
+import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Movie {
@@ -15,6 +15,13 @@ interface Movie {
   vod_score: string;
   vod_content: string;
   vod_play_url?: string;
+  type_id?: string;
+  type_name?: string;
+}
+
+interface Category {
+  type_id: string;
+  type_name: string;
 }
 
 const Movies = () => {
@@ -22,17 +29,34 @@ const Movies = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [corsError, setCorsError] = useState(false);
   const apiUrl = searchParams.get('api');
 
   useEffect(() => {
     if (apiUrl) {
+      fetchCategories();
       fetchMovies();
     }
-  }, [apiUrl, currentPage]);
+  }, [apiUrl]);
+
+  useEffect(() => {
+    if (apiUrl && selectedCategory) {
+      setCurrentPage(1);
+      fetchMovies();
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    if (apiUrl) {
+      fetchMovies();
+    }
+  }, [currentPage]);
 
   const getImageUrl = (originalUrl: string) => {
     if (!originalUrl) return '/placeholder.svg';
@@ -56,35 +80,86 @@ const Movies = () => {
     return originalUrl;
   };
 
+  const fetchCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      
+      // 构建分类API URL
+      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=list`;
+      console.log('正在获取分类:', url);
+      
+      let response;
+      try {
+        response = await fetch(url);
+        if (!response.ok) throw new Error('Direct request failed');
+        console.log('分类直接请求成功');
+      } catch (error) {
+        console.log('分类直接请求失败，尝试使用代理...', error);
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+          response = await fetch(proxyUrl);
+          console.log('分类代理请求成功');
+        } catch (proxyError) {
+          console.log('分类代理1失败，尝试备用代理...', proxyError);
+          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+          response = await fetch(proxyUrl2);
+          console.log('分类备用代理请求成功');
+        }
+      }
+      
+      const data = await response.json();
+      console.log('获取到的分类数据:', data);
+      
+      if (data.class && Array.isArray(data.class)) {
+        setCategories(data.class);
+        console.log('成功加载分类数据:', data.class.length, '个分类');
+      } else {
+        console.log('没有找到分类数据或格式不正确');
+        setCategories([]);
+      }
+    } catch (error) {
+      console.error('获取分类失败:', error);
+      setCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
   const fetchMovies = async () => {
     try {
       setLoading(true);
       setCorsError(false);
       
       let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}pg=${currentPage}`;
-      console.log('正在请求:', url);
+      
+      // 如果选择了分类，添加分类参数
+      if (selectedCategory) {
+        url += `&t=${selectedCategory}`;
+      }
+      
+      console.log('正在请求影片:', url);
       
       let response;
       try {
         response = await fetch(url);
         if (!response.ok) throw new Error('Direct request failed');
-        console.log('直接请求成功');
+        console.log('影片直接请求成功');
       } catch (error) {
-        console.log('直接请求失败，尝试使用代理...', error);
+        console.log('影片直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl);
-          console.log('代理请求成功');
+          console.log('影片代理请求成功');
         } catch (proxyError) {
-          console.log('代理1失败，尝试备用代理...', proxyError);
+          console.log('影片代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl2);
-          console.log('备用代理请求成功');
+          console.log('影片备用代理请求成功');
         }
       }
       
       const data = await response.json();
-      console.log('获取到的数据:', data);
+      console.log('获取到的影片数据:', data);
       
       if (data.list && Array.isArray(data.list)) {
         setMovies(data.list);
@@ -95,7 +170,7 @@ const Movies = () => {
           console.log(`影片: ${movie.vod_name}, 原始图片URL: ${movie.vod_pic}, 处理后: ${getImageUrl(movie.vod_pic)}`);
         });
       } else {
-        console.error('数据格式错误:', data);
+        console.error('影片数据格式错误:', data);
         toast({
           title: "数据格式错误",
           description: "API返回的数据格式不正确",
@@ -103,7 +178,7 @@ const Movies = () => {
         });
       }
     } catch (error) {
-      console.error('请求失败:', error);
+      console.error('请求影片失败:', error);
       setCorsError(true);
       toast({
         title: "连接失败",
@@ -123,7 +198,12 @@ const Movies = () => {
     navigate(`/player?api=${encodeURIComponent(apiUrl || '')}&id=${movie.vod_id}`);
   };
 
-  if (loading) {
+  const handleCategoryChange = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setCurrentPage(1);
+  };
+
+  if (loading && movies.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-center">
@@ -165,6 +245,46 @@ const Movies = () => {
         </div>
       </div>
 
+      {/* Categories Filter */}
+      {!categoriesLoading && categories.length > 0 && (
+        <div className="bg-black/20 backdrop-blur-md border-b border-purple-500/20">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center space-x-3 mb-4">
+              <Filter className="h-5 w-5 text-purple-400" />
+              <h2 className="text-lg font-semibold text-white">分类筛选</h2>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Button
+                variant={selectedCategory === '' ? "default" : "ghost"}
+                onClick={() => handleCategoryChange('')}
+                className={`text-sm h-9 ${
+                  selectedCategory === '' 
+                    ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                    : "text-white hover:bg-white/10 border border-purple-500/30"
+                }`}
+              >
+                全部
+              </Button>
+              {categories.map((category) => (
+                <Button
+                  key={category.type_id}
+                  variant={selectedCategory === category.type_id ? "default" : "ghost"}
+                  onClick={() => handleCategoryChange(category.type_id)}
+                  className={`text-sm h-9 truncate ${
+                    selectedCategory === category.type_id 
+                      ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                      : "text-white hover:bg-white/10 border border-purple-500/30"
+                  }`}
+                  title={category.type_name}
+                >
+                  {category.type_name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CORS错误提示 */}
       {corsError && movies.length === 0 && (
         <div className="container mx-auto px-4 py-6">
@@ -188,6 +308,16 @@ const Movies = () => {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Loading indicator for category change */}
+      {loading && movies.length > 0 && (
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-purple-400 mr-2" />
+            <span className="text-white">正在加载...</span>
+          </div>
         </div>
       )}
 
