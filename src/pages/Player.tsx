@@ -56,14 +56,27 @@ const Player = () => {
   const fetchMovieDetail = async () => {
     try {
       setLoading(true);
-      const url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&ids=${movieId}`;
-      const response = await fetch(url);
+      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&ids=${movieId}`;
+      
+      // 尝试直接请求
+      let response;
+      try {
+        response = await fetch(url);
+        if (!response.ok) throw new Error('Direct request failed');
+      } catch (error) {
+        console.log('直接请求失败，尝试使用代理...');
+        // 使用CORS代理
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        response = await fetch(proxyUrl);
+      }
+      
       const data = await response.json();
       
       if (data.list && data.list[0]) {
         const movieData = data.list[0];
         setMovie(movieData);
         parsePlayUrls(movieData.vod_play_url);
+        console.log('成功加载影片详情:', movieData.vod_name);
       } else {
         toast({
           title: "加载失败",
@@ -72,9 +85,10 @@ const Player = () => {
         });
       }
     } catch (error) {
+      console.error('获取影片详情失败:', error);
       toast({
         title: "连接错误",
-        description: "无法连接到数据源",
+        description: "无法连接到数据源，请检查网络连接",
         variant: "destructive"
       });
     } finally {
