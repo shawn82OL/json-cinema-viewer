@@ -8,32 +8,6 @@ interface MovieInfoProps {
 }
 
 export const MovieInfo: React.FC<MovieInfoProps> = ({ movie }) => {
-  const [imageError, setImageError] = React.useState(false);
-
-  // 处理图片URL
-  const getImageUrl = (picUrl: string): string => {
-    if (!picUrl) return '/placeholder.svg';
-    
-    if (imageError) {
-      // 如果原图片失败，尝试使用代理
-      return `https://images.weserv.nl/?url=${encodeURIComponent(picUrl)}&w=300&h=400&fit=cover&a=attention`;
-    }
-    
-    // 如果已经是完整URL，直接返回
-    if (picUrl.startsWith('http://') || picUrl.startsWith('https://')) {
-      return picUrl;
-    }
-    
-    return picUrl;
-  };
-
-  const handleImageError = () => {
-    console.log('海报加载失败，尝试使用代理:', movie.vod_pic);
-    if (!imageError) {
-      setImageError(true);
-    }
-  };
-
   return (
     <Card className="bg-white/10 backdrop-blur-md border-purple-500/20">
       <CardContent className="p-4">
@@ -41,17 +15,41 @@ export const MovieInfo: React.FC<MovieInfoProps> = ({ movie }) => {
           <div className="w-full h-48 sm:h-56 lg:h-64 bg-gray-800 rounded-lg overflow-hidden relative">
             {movie.vod_pic ? (
               <img
-                src={getImageUrl(movie.vod_pic)}
+                src={movie.vod_pic}
                 alt={movie.vod_name}
                 className="w-full h-full object-cover"
-                onError={handleImageError}
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  console.log('播放页海报加载失败，原始URL:', movie.vod_pic);
+                  
+                  // 尝试不同的图片代理服务
+                  const proxyUrls = [
+                    `https://images.weserv.nl/?url=${encodeURIComponent(movie.vod_pic)}&w=300&h=400&fit=cover`,
+                    `https://wsrv.nl/?url=${encodeURIComponent(movie.vod_pic)}&w=300&h=400&fit=cover`,
+                    `https://api.allorigins.win/raw?url=${encodeURIComponent(movie.vod_pic)}`,
+                    '/placeholder.svg'
+                  ];
+                  
+                  // 获取当前尝试的代理索引
+                  const currentIndex = target.dataset.proxyIndex ? parseInt(target.dataset.proxyIndex) : 0;
+                  
+                  if (currentIndex < proxyUrls.length - 1) {
+                    target.dataset.proxyIndex = (currentIndex + 1).toString();
+                    target.src = proxyUrls[currentIndex + 1];
+                    console.log(`播放页尝试代理 ${currentIndex + 1}:`, proxyUrls[currentIndex + 1]);
+                  } else {
+                    console.log('播放页所有代理都失败，使用占位图');
+                    target.src = '/placeholder.svg';
+                  }
+                }}
                 onLoad={() => {
-                  console.log('海报加载成功:', movie.vod_pic);
+                  console.log('播放页海报加载成功:', movie.vod_name);
                 }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gray-700">
                 <Image className="h-16 w-16 text-gray-500" />
+                <span className="text-gray-400 text-sm ml-2">暂无海报</span>
               </div>
             )}
           </div>
