@@ -125,19 +125,23 @@ const Movies = () => {
 
   // 改进的图片URL处理函数
   const getImageUrl = (originalUrl: string) => {
-    if (!originalUrl) {
-      console.log('没有原始图片URL');
+    console.log('=== 图片URL处理开始 ===');
+    console.log('原始URL:', originalUrl);
+    console.log('URL类型:', typeof originalUrl);
+    console.log('URL长度:', originalUrl ? originalUrl.length : 0);
+    
+    if (!originalUrl || originalUrl.trim() === '') {
+      console.log('❌ 没有原始图片URL或URL为空');
       return '/placeholder.svg';
     }
     
     // 清理URL，移除多余的空格和特殊字符
     let cleanUrl = originalUrl.trim();
-    console.log('原始图片URL:', originalUrl);
     console.log('清理后URL:', cleanUrl);
     
     // 如果已经是完整的HTTP/HTTPS URL，直接返回
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-      console.log('返回完整URL:', cleanUrl);
+      console.log('✅ 返回完整URL:', cleanUrl);
       return cleanUrl;
     }
     
@@ -146,10 +150,10 @@ const Movies = () => {
       try {
         const apiDomain = new URL(apiUrl || '').origin;
         const finalUrl = apiDomain + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
-        console.log('构建的完整URL:', finalUrl);
+        console.log('✅ 构建的完整URL:', finalUrl);
         return finalUrl;
       } catch (error) {
-        console.log('构建URL失败:', error);
+        console.log('❌ 构建URL失败:', error);
         return cleanUrl;
       }
     }
@@ -157,11 +161,11 @@ const Movies = () => {
     // 如果URL不是以http开头，添加https
     if (!cleanUrl.startsWith('http')) {
       const finalUrl = 'https://' + cleanUrl;
-      console.log('添加https后的URL:', finalUrl);
+      console.log('✅ 添加https后的URL:', finalUrl);
       return finalUrl;
     }
     
-    console.log('最终返回URL:', cleanUrl);
+    console.log('✅ 最终返回URL:', cleanUrl);
     return cleanUrl;
   };
 
@@ -350,7 +354,25 @@ const Movies = () => {
       }
       
       const data = await response.json();
-      console.log('获取到的影片数据:', data);
+      console.log('=== 获取到的影片数据 ===');
+      console.log('完整数据:', data);
+      console.log('数据类型:', typeof data);
+      console.log('是否有list:', !!data.list);
+      console.log('list类型:', typeof data.list);
+      console.log('list长度:', data.list ? data.list.length : 0);
+      
+      // 详细检查前几个影片的数据结构
+      if (data.list && Array.isArray(data.list) && data.list.length > 0) {
+        console.log('=== 前3个影片的详细数据 ===');
+        data.list.slice(0, 3).forEach((movie: Movie, index: number) => {
+          console.log(`影片 ${index + 1}:`, movie);
+          console.log(`  - vod_name: ${movie.vod_name}`);
+          console.log(`  - vod_pic: ${movie.vod_pic}`);
+          console.log(`  - vod_pic类型: ${typeof movie.vod_pic}`);
+          console.log(`  - vod_pic长度: ${movie.vod_pic ? movie.vod_pic.length : 0}`);
+          console.log(`  - 所有字段:`, Object.keys(movie));
+        });
+      }
       
       if (data.list && Array.isArray(data.list)) {
         if (isInitial) {
@@ -368,14 +390,6 @@ const Movies = () => {
         }
         
         console.log('成功加载影片数据:', data.list.length, '部影片');
-        
-        // 打印前几个影片的图片URL用于调试
-        data.list.slice(0, 3).forEach((movie: Movie) => {
-          console.log(`影片: ${movie.vod_name}`);
-          console.log(`原始图片URL: ${movie.vod_pic}`);
-          console.log(`处理后URL: ${getImageUrl(movie.vod_pic)}`);
-          console.log('---');
-        });
       } else {
         console.error('影片数据格式错误:', data);
         if (isInitial) {
@@ -603,8 +617,13 @@ const Movies = () => {
           <>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
               {movies.map((movie) => {
+                console.log(`=== 渲染影片: ${movie.vod_name} ===`);
+                console.log('影片数据:', movie);
+                console.log('vod_pic值:', movie.vod_pic);
+                console.log('vod_pic类型:', typeof movie.vod_pic);
+                
                 const imageUrl = getImageUrl(movie.vod_pic);
-                console.log(`渲染影片 ${movie.vod_name}:`, imageUrl);
+                console.log(`最终图片URL: ${imageUrl}`);
                 
                 return (
                   <Card
@@ -615,7 +634,7 @@ const Movies = () => {
                     <CardContent className="p-0">
                       <div className="relative">
                         <div className="w-full aspect-[3/4] bg-gray-800 rounded-t-lg overflow-hidden relative">
-                          {movie.vod_pic && movie.vod_pic.trim() ? (
+                          {movie.vod_pic && movie.vod_pic.trim() !== '' ? (
                             <img
                               src={imageUrl}
                               alt={movie.vod_name}
@@ -623,9 +642,9 @@ const Movies = () => {
                               loading="lazy"
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
-                                console.log('图片加载失败，影片:', movie.vod_name);
-                                console.log('失败的URL:', target.src);
-                                console.log('原始URL:', movie.vod_pic);
+                                console.log('❌ 图片加载失败，影片:', movie.vod_name);
+                                console.log('❌ 失败的URL:', target.src);
+                                console.log('❌ 原始URL:', movie.vod_pic);
                                 
                                 // 尝试不同的图片代理服务
                                 const originalUrl = movie.vod_pic;
@@ -644,14 +663,14 @@ const Movies = () => {
                                 if (currentIndex < proxyUrls.length - 1) {
                                   target.dataset.proxyIndex = (currentIndex + 1).toString();
                                   target.src = proxyUrls[currentIndex + 1];
-                                  console.log(`尝试代理 ${currentIndex + 1}:`, proxyUrls[currentIndex + 1]);
+                                  console.log(`🔄 尝试代理 ${currentIndex + 1}:`, proxyUrls[currentIndex + 1]);
                                 } else {
-                                  console.log('所有代理都失败，使用占位图');
+                                  console.log('❌ 所有代理都失败，使用占位图');
                                   target.src = '/placeholder.svg';
                                 }
                               }}
                               onLoad={() => {
-                                console.log('图片加载成功:', movie.vod_name);
+                                console.log('✅ 图片加载成功:', movie.vod_name);
                               }}
                             />
                           ) : (
