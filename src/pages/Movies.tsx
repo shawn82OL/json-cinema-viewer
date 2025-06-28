@@ -42,6 +42,7 @@ const Movies = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedMajorCategory, setSelectedMajorCategory] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [corsError, setCorsError] = useState(false);
   const apiUrl = searchParams.get('api');
@@ -123,14 +124,6 @@ const Movies = () => {
       categories: []
     }));
 
-    // 其他分类
-    const otherCategory: MajorCategory = {
-      name: '其他',
-      keywords: [],
-      categories: [],
-      expanded: false
-    };
-
     categories.forEach(category => {
       let assigned = false;
       
@@ -145,20 +138,12 @@ const Movies = () => {
           break;
         }
       }
-      
-      // 如果没有匹配到任何大分类，放入其他
-      if (!assigned) {
-        otherCategory.categories.push(category);
-      }
     });
 
-    // 只返回有内容的大分类
-    const finalResult = result.filter(cat => cat.categories.length > 0);
-    if (otherCategory.categories.length > 0) {
-      finalResult.push(otherCategory);
-    }
-
-    return finalResult;
+    // 只返回有内容的大分类，并按分类数量排序
+    return result
+      .filter(cat => cat.categories.length > 0)
+      .sort((a, b) => b.categories.length - a.categories.length);
   };
 
   const fetchCategories = async () => {
@@ -289,10 +274,24 @@ const Movies = () => {
     setCurrentPage(1);
   };
 
-  const toggleMajorCategory = (index: number) => {
-    setMajorCategories(prev => prev.map((cat, i) => 
-      i === index ? { ...cat, expanded: !cat.expanded } : cat
-    ));
+  const handleMajorCategoryClick = (majorCatName: string) => {
+    if (selectedMajorCategory === majorCatName) {
+      // 如果点击的是当前选中的大分类，则取消选择
+      setSelectedMajorCategory('');
+      setSelectedCategory('');
+    } else {
+      // 选择新的大分类
+      setSelectedMajorCategory(majorCatName);
+      setSelectedCategory(''); // 清除小分类选择
+    }
+    setCurrentPage(1);
+  };
+
+  // 获取当前选中大分类的小分类
+  const getCurrentMajorCategorySubCategories = () => {
+    if (!selectedMajorCategory) return [];
+    const majorCat = majorCategories.find(cat => cat.name === selectedMajorCategory);
+    return majorCat ? majorCat.categories : [];
   };
 
   if (loading && movies.length === 0) {
@@ -346,64 +345,66 @@ const Movies = () => {
               <h2 className="text-lg font-semibold text-white">分类筛选</h2>
             </div>
             
-            {/* 全部按钮 */}
+            {/* 大分类 - 横向排列 */}
             <div className="mb-4">
-              <Button
-                variant={selectedCategory === '' ? "default" : "ghost"}
-                onClick={() => handleCategoryChange('')}
-                className={`text-sm h-9 ${
-                  selectedCategory === '' 
-                    ? "bg-purple-600 hover:bg-purple-700 text-white" 
-                    : "text-white hover:bg-white/10 border border-purple-500/30"
-                }`}
-              >
-                全部
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={selectedMajorCategory === '' ? "default" : "ghost"}
+                  onClick={() => {
+                    setSelectedMajorCategory('');
+                    setSelectedCategory('');
+                    setCurrentPage(1);
+                  }}
+                  className={`text-sm h-9 ${
+                    selectedMajorCategory === '' 
+                      ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                      : "text-white hover:bg-white/10 border border-purple-500/30"
+                  }`}
+                >
+                  全部
+                </Button>
+                {majorCategories.map((majorCat) => (
+                  <Button
+                    key={majorCat.name}
+                    variant={selectedMajorCategory === majorCat.name ? "default" : "ghost"}
+                    onClick={() => handleMajorCategoryClick(majorCat.name)}
+                    className={`text-sm h-9 ${
+                      selectedMajorCategory === majorCat.name 
+                        ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                        : "text-white hover:bg-white/10 border border-purple-500/30"
+                    }`}
+                  >
+                    {majorCat.name}
+                  </Button>
+                ))}
+              </div>
             </div>
 
-            {/* 大分类 */}
-            <div className="space-y-3">
-              {majorCategories.map((majorCat, index) => (
-                <div key={majorCat.name} className="border border-purple-500/20 rounded-lg bg-white/5">
-                  {/* 大分类标题 */}
-                  <Button
-                    variant="ghost"
-                    onClick={() => toggleMajorCategory(index)}
-                    className="w-full justify-between text-white hover:bg-white/10 p-3 h-auto"
-                  >
-                    <span className="font-medium">{majorCat.name} ({majorCat.categories.length})</span>
-                    {majorCat.expanded ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </Button>
-                  
-                  {/* 小分类 */}
-                  {majorCat.expanded && (
-                    <div className="p-3 pt-0">
-                      <div className="grid grid-cols-3 gap-2">
-                        {majorCat.categories.map((category) => (
-                          <Button
-                            key={category.type_id}
-                            variant={selectedCategory === category.type_id ? "default" : "ghost"}
-                            onClick={() => handleCategoryChange(category.type_id)}
-                            className={`text-xs h-8 truncate ${
-                              selectedCategory === category.type_id 
-                                ? "bg-purple-600 hover:bg-purple-700 text-white" 
-                                : "text-white hover:bg-white/10 border border-purple-500/30"
-                            }`}
-                            title={category.type_name}
-                          >
-                            {category.type_name}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+            {/* 小分类 - 当选择了大分类时显示 */}
+            {selectedMajorCategory && getCurrentMajorCategorySubCategories().length > 0 && (
+              <div className="border border-purple-500/20 rounded-lg bg-white/5 p-3">
+                <div className="flex items-center space-x-2 mb-3">
+                  <span className="text-white font-medium text-sm">{selectedMajorCategory}分类:</span>
                 </div>
-              ))}
-            </div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {getCurrentMajorCategorySubCategories().map((category) => (
+                    <Button
+                      key={category.type_id}
+                      variant={selectedCategory === category.type_id ? "default" : "ghost"}
+                      onClick={() => handleCategoryChange(category.type_id)}
+                      className={`text-xs h-8 truncate ${
+                        selectedCategory === category.type_id 
+                          ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                          : "text-white hover:bg-white/10 border border-purple-500/30"
+                      }`}
+                      title={category.type_name}
+                    >
+                      {category.type_name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
