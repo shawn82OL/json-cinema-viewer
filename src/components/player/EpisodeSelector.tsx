@@ -38,8 +38,9 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                     ? "bg-purple-600 hover:bg-purple-700 text-white" 
                     : "text-white hover:bg-white/10 border border-purple-500/30"
                 }`}
+                title={episode.name} // 显示完整名称作为提示
               >
-                {index + 1}
+                {episode.name}
               </Button>
             ))}
           </div>
@@ -107,8 +108,9 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                           ? "bg-purple-600 hover:bg-purple-700 text-white" 
                           : "text-white hover:bg-white/10 border border-purple-500/30"
                       }`}
+                      title={episode.name} // 显示完整名称作为提示
                     >
-                      {globalIndex + 1}
+                      {episode.name}
                     </Button>
                   );
                 })}
