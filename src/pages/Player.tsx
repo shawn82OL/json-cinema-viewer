@@ -139,7 +139,6 @@ const Player = () => {
         airplay: true,
         theme: '#8b5cf6',
         lang: navigator.language.toLowerCase(),
-        whitelist: ['*'],
         moreVideoAttr: {
           crossOrigin: 'anonymous',
         },
