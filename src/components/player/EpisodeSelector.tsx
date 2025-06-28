@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { PlayUrl } from '@/types/movie';
 
 interface EpisodeSelectorProps {
@@ -26,7 +25,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           <h3 className="text-white text-base font-semibold mb-3">
             选集播放 ({playUrls.length}集)
           </h3>
-          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+          <div className="grid grid-cols-10 gap-2">
             {playUrls.map((episode, index) => (
               <Button
                 key={index}
@@ -38,7 +37,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                     ? "bg-purple-600 hover:bg-purple-700 text-white" 
                     : "text-white hover:bg-white/10 border border-purple-500/30"
                 }`}
-                title={episode.name} // 显示完整名称作为提示
+                title={episode.name}
               >
                 {episode.name}
               </Button>
@@ -49,7 +48,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     );
   }
 
-  // 如果集数超过20集，使用分页显示
+  // 如果集数超过20集，使用分页显示，每页20集，每行10集
   const episodesPerPage = 20;
   const totalPages = Math.ceil(playUrls.length / episodesPerPage);
   
@@ -77,7 +76,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         </h3>
         
         <Tabs defaultValue={defaultTab} className="w-full">
-          {/* 修复横向滚动 - 使用overflow-x-auto和flex布局 */}
+          {/* 修复横向滚动 */}
           <div className="w-full overflow-x-auto mb-3">
             <TabsList className="flex h-10 items-center justify-start rounded-md bg-black/30 p-1 text-muted-foreground min-w-max">
               {pages.map((page, index) => (
@@ -94,26 +93,55 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           
           {pages.map((page, pageIndex) => (
             <TabsContent key={pageIndex} value={pageIndex.toString()} className="mt-0">
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
-                {page.episodes.map((episode, episodeIndex) => {
-                  const globalIndex = page.startIndex + episodeIndex;
-                  return (
-                    <Button
-                      key={globalIndex}
-                      variant={currentUrl === episode.url ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => onEpisodeSelect(episode.url)}
-                      className={`text-xs h-8 px-2 ${
-                        currentUrl === episode.url 
-                          ? "bg-purple-600 hover:bg-purple-700 text-white" 
-                          : "text-white hover:bg-white/10 border border-purple-500/30"
-                      }`}
-                      title={episode.name} // 显示完整名称作为提示
-                    >
-                      {episode.name}
-                    </Button>
-                  );
-                })}
+              {/* 每页20集，分成2行，每行10集 */}
+              <div className="space-y-2">
+                {/* 第一行：前10集 */}
+                <div className="grid grid-cols-10 gap-2">
+                  {page.episodes.slice(0, 10).map((episode, episodeIndex) => {
+                    const globalIndex = page.startIndex + episodeIndex;
+                    return (
+                      <Button
+                        key={globalIndex}
+                        variant={currentUrl === episode.url ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => onEpisodeSelect(episode.url)}
+                        className={`text-xs h-8 px-2 ${
+                          currentUrl === episode.url 
+                            ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                            : "text-white hover:bg-white/10 border border-purple-500/30"
+                        }`}
+                        title={episode.name}
+                      >
+                        {episode.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                {/* 第二行：后10集（如果有的话） */}
+                {page.episodes.length > 10 && (
+                  <div className="grid grid-cols-10 gap-2">
+                    {page.episodes.slice(10, 20).map((episode, episodeIndex) => {
+                      const globalIndex = page.startIndex + 10 + episodeIndex;
+                      return (
+                        <Button
+                          key={globalIndex}
+                          variant={currentUrl === episode.url ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => onEpisodeSelect(episode.url)}
+                          className={`text-xs h-8 px-2 ${
+                            currentUrl === episode.url 
+                              ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                              : "text-white hover:bg-white/10 border border-purple-500/30"
+                          }`}
+                          title={episode.name}
+                        >
+                          {episode.name}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </TabsContent>
           ))}
