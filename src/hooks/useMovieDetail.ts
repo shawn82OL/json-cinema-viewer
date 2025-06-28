@@ -8,6 +8,14 @@ export const useMovieDetail = (apiUrl: string | null, movieId: string | null) =>
   const [playUrls, setPlayUrls] = useState<PlayUrl[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // 检测API类型
+  const detectApiType = (url: string) => {
+    if (url.includes('heimuer.tv') || url.includes('ajax/data')) {
+      return 'heimuer';
+    }
+    return 'standard';
+  };
+
   const parsePlayUrls = (playUrl: string): PlayUrl[] => {
     if (!playUrl) {
       console.log('没有播放链接数据');
@@ -68,7 +76,16 @@ export const useMovieDetail = (apiUrl: string | null, movieId: string | null) =>
     
     try {
       setLoading(true);
-      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&ids=${movieId}`;
+      const apiType = detectApiType(apiUrl);
+      let url = '';
+      
+      if (apiType === 'heimuer') {
+        // 黑木耳API的详情格式
+        url = `https://heimuer.tv/index.php/ajax/data?mid=1&id=${movieId}`;
+      } else {
+        // 标准API的详情格式
+        url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&ids=${movieId}`;
+      }
       
       console.log('正在获取影片详情:', url);
       
@@ -94,8 +111,20 @@ export const useMovieDetail = (apiUrl: string | null, movieId: string | null) =>
       const data = await response.json();
       console.log('获取到的数据:', data);
       
-      if (data.list && data.list[0]) {
-        const movieData = data.list[0];
+      let movieData = null;
+      if (apiType === 'heimuer') {
+        // 黑木耳API的数据格式
+        if (data.data && data.data.length > 0) {
+          movieData = data.data[0];
+        }
+      } else {
+        // 标准API的数据格式
+        if (data.list && data.list[0]) {
+          movieData = data.list[0];
+        }
+      }
+      
+      if (movieData) {
         setMovie(movieData);
         
         // 解析播放链接
