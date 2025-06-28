@@ -123,25 +123,17 @@ const Movies = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [loading, loadingMore, hasMore, isSearching]);
 
-  // 改进的图片URL处理函数
+  // 简化的图片URL处理函数
   const getImageUrl = (originalUrl: string) => {
-    console.log('=== 图片URL处理开始 ===');
-    console.log('原始URL:', originalUrl);
-    console.log('URL类型:', typeof originalUrl);
-    console.log('URL长度:', originalUrl ? originalUrl.length : 0);
-    
     if (!originalUrl || originalUrl.trim() === '') {
-      console.log('❌ 没有原始图片URL或URL为空');
       return '/placeholder.svg';
     }
     
-    // 清理URL，移除多余的空格和特殊字符
+    // 清理URL
     let cleanUrl = originalUrl.trim();
-    console.log('清理后URL:', cleanUrl);
     
     // 如果已经是完整的HTTP/HTTPS URL，直接返回
     if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-      console.log('✅ 返回完整URL:', cleanUrl);
       return cleanUrl;
     }
     
@@ -149,35 +141,18 @@ const Movies = () => {
     if (cleanUrl.startsWith('/') || cleanUrl.startsWith('./')) {
       try {
         const apiDomain = new URL(apiUrl || '').origin;
-        const finalUrl = apiDomain + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
-        console.log('✅ 构建的完整URL:', finalUrl);
-        return finalUrl;
+        return apiDomain + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
       } catch (error) {
-        console.log('❌ 构建URL失败:', error);
         return cleanUrl;
       }
     }
     
     // 如果URL不是以http开头，添加https
     if (!cleanUrl.startsWith('http')) {
-      const finalUrl = 'https://' + cleanUrl;
-      console.log('✅ 添加https后的URL:', finalUrl);
-      return finalUrl;
+      return 'https://' + cleanUrl;
     }
     
-    console.log('✅ 最终返回URL:', cleanUrl);
     return cleanUrl;
-  };
-
-  // 验证响应是否为有效JSON的辅助函数
-  const validateJsonResponse = async (response: Response) => {
-    if (!response || !response.ok) {
-      throw new Error(`HTTP error! status: ${response?.status || 'unknown'}`);
-    }
-
-    // Remove the strict Content-Type check since some APIs return JSON with incorrect headers
-    // The response.json() method will handle parsing and throw an error if it's not valid JSON
-    return response;
   };
 
   // 搜索处理函数
@@ -199,20 +174,18 @@ const Movies = () => {
       let response;
       try {
         response = await fetch(searchUrl);
-        await validateJsonResponse(response);
+        if (!response.ok) throw new Error('Direct search request failed');
         console.log('搜索直接请求成功');
       } catch (error) {
         console.log('搜索直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
           response = await fetch(proxyUrl);
-          await validateJsonResponse(response);
           console.log('搜索代理请求成功');
         } catch (proxyError) {
           console.log('搜索代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
           response = await fetch(proxyUrl2);
-          await validateJsonResponse(response);
           console.log('搜索备用代理请求成功');
         }
       }
@@ -244,7 +217,7 @@ const Movies = () => {
       setMovies([]);
       toast({
         title: "搜索错误",
-        description: `搜索时发生错误: ${error instanceof Error ? error.message : '未知错误'}`,
+        description: "搜索时发生错误，请检查网络连接",
         variant: "destructive"
       });
     }
@@ -289,20 +262,18 @@ const Movies = () => {
       let response;
       try {
         response = await fetch(url);
-        await validateJsonResponse(response);
+        if (!response.ok) throw new Error('Direct request failed');
         console.log('分类直接请求成功');
       } catch (error) {
         console.log('分类直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl);
-          await validateJsonResponse(response);
           console.log('分类代理请求成功');
         } catch (proxyError) {
           console.log('分类代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl2);
-          await validateJsonResponse(response);
           console.log('分类备用代理请求成功');
         }
       }
@@ -325,11 +296,6 @@ const Movies = () => {
       console.error('获取分类失败:', error);
       setCategories([]);
       setMajorCategories([]);
-      toast({
-        title: "获取分类失败",
-        description: `无法获取分类信息: ${error instanceof Error ? error.message : '未知错误'}`,
-        variant: "destructive"
-      });
     } finally {
       setCategoriesLoading(false);
     }
@@ -357,46 +323,38 @@ const Movies = () => {
       let response;
       try {
         response = await fetch(url);
-        await validateJsonResponse(response);
+        if (!response.ok) throw new Error('Direct request failed');
         console.log('影片直接请求成功');
       } catch (error) {
         console.log('影片直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl);
-          await validateJsonResponse(response);
           console.log('影片代理请求成功');
         } catch (proxyError) {
           console.log('影片代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl2);
-          await validateJsonResponse(response);
           console.log('影片备用代理请求成功');
         }
       }
       
       const data = await response.json();
-      console.log('=== 获取到的影片数据 ===');
-      console.log('完整数据:', data);
-      console.log('数据类型:', typeof data);
-      console.log('是否有list:', !!data.list);
-      console.log('list类型:', typeof data.list);
-      console.log('list长度:', data.list ? data.list.length : 0);
       
-      // 详细检查前几个影片的数据结构
-      if (data.list && Array.isArray(data.list) && data.list.length > 0) {
-        console.log('=== 前3个影片的详细数据 ===');
-        data.list.slice(0, 3).forEach((movie: Movie, index: number) => {
-          console.log(`影片 ${index + 1}:`, movie);
-          console.log(`  - vod_name: ${movie.vod_name}`);
-          console.log(`  - vod_pic: ${movie.vod_pic}`);
-          console.log(`  - vod_pic类型: ${typeof movie.vod_pic}`);
-          console.log(`  - vod_pic长度: ${movie.vod_pic ? movie.vod_pic.length : 0}`);
-          console.log(`  - 所有字段:`, Object.keys(movie));
-        });
-      }
+      // 详细检查数据结构
+      console.log('=== API响应数据分析 ===');
+      console.log('完整响应:', data);
       
       if (data.list && Array.isArray(data.list)) {
+        // 检查前几个影片的数据结构
+        console.log('=== 影片数据结构分析 ===');
+        data.list.slice(0, 3).forEach((movie: any, index: number) => {
+          console.log(`影片 ${index + 1}:`, movie);
+          console.log(`  所有字段:`, Object.keys(movie));
+          console.log(`  vod_pic字段:`, movie.vod_pic);
+          console.log(`  vod_pic类型:`, typeof movie.vod_pic);
+        });
+        
         if (isInitial) {
           setMovies(data.list);
           setAllMovies(data.list); // 保存所有电影用于搜索
@@ -428,7 +386,7 @@ const Movies = () => {
       if (isInitial) {
         toast({
           title: "连接失败",
-          description: `无法连接到数据源: ${error instanceof Error ? error.message : '未知错误'}`,
+          description: "无法连接到数据源，请检查API地址或网络连接",
           variant: "destructive"
         });
       }
@@ -639,13 +597,7 @@ const Movies = () => {
           <>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
               {movies.map((movie) => {
-                console.log(`=== 渲染影片: ${movie.vod_name} ===`);
-                console.log('影片数据:', movie);
-                console.log('vod_pic值:', movie.vod_pic);
-                console.log('vod_pic类型:', typeof movie.vod_pic);
-                
                 const imageUrl = getImageUrl(movie.vod_pic);
-                console.log(`最终图片URL: ${imageUrl}`);
                 
                 return (
                   <Card
@@ -664,35 +616,11 @@ const Movies = () => {
                               loading="lazy"
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
-                                console.log('❌ 图片加载失败，影片:', movie.vod_name);
-                                console.log('❌ 失败的URL:', target.src);
-                                console.log('❌ 原始URL:', movie.vod_pic);
-                                
-                                // 尝试不同的图片代理服务
-                                const originalUrl = movie.vod_pic;
-                                const proxyUrls = [
-                                  `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover&output=webp`,
-                                  `https://wsrv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
-                                  `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`,
-                                  `https://corsproxy.io/?${encodeURIComponent(originalUrl)}`,
-                                  `https://proxy.cors.sh/${originalUrl}`,
-                                  '/placeholder.svg'
-                                ];
-                                
-                                // 获取当前尝试的代理索引
-                                const currentIndex = target.dataset.proxyIndex ? parseInt(target.dataset.proxyIndex) : 0;
-                                
-                                if (currentIndex < proxyUrls.length - 1) {
-                                  target.dataset.proxyIndex = (currentIndex + 1).toString();
-                                  target.src = proxyUrls[currentIndex + 1];
-                                  console.log(`🔄 尝试代理 ${currentIndex + 1}:`, proxyUrls[currentIndex + 1]);
-                                } else {
-                                  console.log('❌ 所有代理都失败，使用占位图');
-                                  target.src = '/placeholder.svg';
-                                }
+                                console.log('图片加载失败:', movie.vod_name, '原始URL:', movie.vod_pic, '处理后URL:', imageUrl);
+                                target.src = '/placeholder.svg';
                               }}
                               onLoad={() => {
-                                console.log('✅ 图片加载成功:', movie.vod_name);
+                                console.log('图片加载成功:', movie.vod_name);
                               }}
                             />
                           ) : (

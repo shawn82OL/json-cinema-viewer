@@ -2,7 +2,6 @@ import React, { useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import Artplayer from 'artplayer';
-import Hls from 'hls.js';
 
 interface VideoPlayerProps {
   currentUrl: string;
@@ -12,46 +11,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
   const { toast } = useToast();
   const playerRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<Artplayer | null>(null);
-  const hlsRef = useRef<Hls | null>(null);
-  const proxyAttemptRef = useRef<number>(0);
-
-  // List of proxy services to try in order
-  const proxyUrls = [
-    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-    (url: string) => `https://cors-anywhere.herokuapp.com/${url}`,
-    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
-    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-    (url: string) => `https://yacdn.org/proxy/${url}`,
-  ];
-
-  const tryNextProxy = (originalUrl: string) => {
-    if (proxyAttemptRef.current < proxyUrls.length) {
-      const proxyUrl = proxyUrls[proxyAttemptRef.current](originalUrl);
-      proxyAttemptRef.current++;
-      
-      console.log(`尝试代理 ${proxyAttemptRef.current}/${proxyUrls.length}:`, proxyUrl);
-      
-      if (artRef.current) {
-        artRef.current.switchUrl(proxyUrl);
-      }
-      return true;
-    }
-    return false;
-  };
 
   const initPlayer = () => {
     if (artRef.current) {
       artRef.current.destroy();
     }
-
-    // Clean up previous HLS instance
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-
-    // Reset proxy attempt counter
-    proxyAttemptRef.current = 0;
 
     if (playerRef.current && currentUrl) {
       console.log('初始化播放器，链接:', currentUrl);
@@ -113,47 +77,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
           type: 'auto', // 自动检测视频格式
           customType: {
             m3u8: function(video: HTMLVideoElement, url: string) {
-              // 使用 hls.js 处理 M3U8 格式
-              if (Hls.isSupported()) {
-                const hls = new Hls({
-                  enableWorker: false,
-                  lowLatencyMode: true,
-                  backBufferLength: 90
-                });
-                
-                hlsRef.current = hls;
-                
-                hls.loadSource(url);
-                hls.attachMedia(video);
-                
-                hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                  console.log('HLS manifest parsed successfully');
-                });
-                
-                hls.on(Hls.Events.ERROR, (event, data) => {
-                  console.error('HLS error:', data);
-                  if (data.fatal) {
-                    switch (data.type) {
-                      case Hls.ErrorTypes.NETWORK_ERROR:
-                        console.log('Network error, trying to recover...');
-                        hls.startLoad();
-                        break;
-                      case Hls.ErrorTypes.MEDIA_ERROR:
-                        console.log('Media error, trying to recover...');
-                        hls.recoverMediaError();
-                        break;
-                      default:
-                        console.log('Fatal error, cannot recover');
-                        hls.destroy();
-                        break;
-                    }
-                  }
-                });
-              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari native HLS support
+              // 如果是m3u8格式，尝试直接播放
+              if (url.includes('.m3u8')) {
                 video.src = url;
-              } else {
-                console.error('HLS is not supported in this browser');
               }
             }
           }
@@ -169,42 +95,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
 
         artRef.current.on('video:canplay', () => {
           console.log('视频可以播放');
-          // Reset proxy attempt counter on successful load
-          proxyAttemptRef.current = 0;
         });
 
         artRef.current.on('video:error', (error) => {
           console.error('视频播放错误:', error);
-          
-          // Try next proxy if available
-          if (!tryNextProxy(currentUrl)) {
-            toast({
-              title: "视频播放错误",
-              description: "当前视频无法播放，已尝试所有可用代理，请尝试其他集数",
-              variant: "destructive"
-            });
-          }
+          toast({
+            title: "视频播放错误",
+            description: "当前视频无法播放，请尝试其他集数",
+            variant: "destructive"
+          });
         });
 
         artRef.current.on('error', (error) => {
           console.error('播放器错误:', error);
-          
-          // Try next proxy if available
-          if (!tryNextProxy(currentUrl)) {
-            toast({
-              title: "播放错误",
-              description: "视频加载失败，已尝试所有可用代理，请尝试其他播放源或稍后重试",
-              variant: "destructive"
-            });
-          }
-        });
-
-        artRef.current.on('destroy', () => {
-          // Clean up HLS instance when player is destroyed
-          if (hlsRef.current) {
-            hlsRef.current.destroy();
-            hlsRef.current = null;
-          }
+          toast({
+            title: "播放错误",
+            description: "视频加载失败，请尝试其他播放源或稍后重试",
+            variant: "destructive"
+          });
         });
 
       } catch (error) {
@@ -235,12 +143,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
         } catch (error) {
           console.log('播放器销毁时出错:', error);
         }
-      }
-      
-      // Clean up HLS instance
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
       }
     };
   }, [currentUrl]);
