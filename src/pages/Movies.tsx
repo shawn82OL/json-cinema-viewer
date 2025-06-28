@@ -169,6 +169,23 @@ const Movies = () => {
     return cleanUrl;
   };
 
+  // 验证响应是否为有效JSON的辅助函数
+  const validateJsonResponse = async (response: Response) => {
+    if (!response || !response.ok) {
+      throw new Error(`HTTP error! status: ${response?.status || 'unknown'}`);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      // 尝试读取响应文本以获取更多信息
+      const text = await response.text();
+      console.log('非JSON响应内容:', text.substring(0, 200));
+      throw new Error(`Expected JSON response but got: ${contentType || 'unknown content type'}. Response starts with: ${text.substring(0, 50)}`);
+    }
+
+    return response;
+  };
+
   // 搜索处理函数
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
@@ -188,18 +205,20 @@ const Movies = () => {
       let response;
       try {
         response = await fetch(searchUrl);
-        if (!response.ok) throw new Error('Direct search request failed');
+        await validateJsonResponse(response);
         console.log('搜索直接请求成功');
       } catch (error) {
         console.log('搜索直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
           response = await fetch(proxyUrl);
+          await validateJsonResponse(response);
           console.log('搜索代理请求成功');
         } catch (proxyError) {
           console.log('搜索代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
           response = await fetch(proxyUrl2);
+          await validateJsonResponse(response);
           console.log('搜索备用代理请求成功');
         }
       }
@@ -231,7 +250,7 @@ const Movies = () => {
       setMovies([]);
       toast({
         title: "搜索错误",
-        description: "搜索时发生错误，请检查网络连接",
+        description: `搜索时发生错误: ${error instanceof Error ? error.message : '未知错误'}`,
         variant: "destructive"
       });
     }
@@ -276,18 +295,20 @@ const Movies = () => {
       let response;
       try {
         response = await fetch(url);
-        if (!response.ok) throw new Error('Direct request failed');
+        await validateJsonResponse(response);
         console.log('分类直接请求成功');
       } catch (error) {
         console.log('分类直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl);
+          await validateJsonResponse(response);
           console.log('分类代理请求成功');
         } catch (proxyError) {
           console.log('分类代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl2);
+          await validateJsonResponse(response);
           console.log('分类备用代理请求成功');
         }
       }
@@ -310,6 +331,11 @@ const Movies = () => {
       console.error('获取分类失败:', error);
       setCategories([]);
       setMajorCategories([]);
+      toast({
+        title: "获取分类失败",
+        description: `无法获取分类信息: ${error instanceof Error ? error.message : '未知错误'}`,
+        variant: "destructive"
+      });
     } finally {
       setCategoriesLoading(false);
     }
@@ -337,18 +363,20 @@ const Movies = () => {
       let response;
       try {
         response = await fetch(url);
-        if (!response.ok) throw new Error('Direct request failed');
+        await validateJsonResponse(response);
         console.log('影片直接请求成功');
       } catch (error) {
         console.log('影片直接请求失败，尝试使用代理...', error);
         try {
           const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl);
+          await validateJsonResponse(response);
           console.log('影片代理请求成功');
         } catch (proxyError) {
           console.log('影片代理1失败，尝试备用代理...', proxyError);
           const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
           response = await fetch(proxyUrl2);
+          await validateJsonResponse(response);
           console.log('影片备用代理请求成功');
         }
       }
@@ -406,7 +434,7 @@ const Movies = () => {
       if (isInitial) {
         toast({
           title: "连接失败",
-          description: "无法连接到数据源，请检查API地址或网络连接",
+          description: `无法连接到数据源: ${error instanceof Error ? error.message : '未知错误'}`,
           variant: "destructive"
         });
       }
