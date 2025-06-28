@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image, Filter } from 'lucide-react';
+import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Movie {
@@ -24,12 +24,20 @@ interface Category {
   type_name: string;
 }
 
+interface MajorCategory {
+  name: string;
+  keywords: string[];
+  categories: Category[];
+  expanded: boolean;
+}
+
 const Movies = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [movies, setMovies] = useState<Movie[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [majorCategories, setMajorCategories] = useState<MajorCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,6 +45,35 @@ const Movies = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [corsError, setCorsError] = useState(false);
   const apiUrl = searchParams.get('api');
+
+  // 定义大分类及其关键词
+  const majorCategoryDefinitions = [
+    {
+      name: '电影',
+      keywords: ['电影', '影片', '剧情片', '动作片', '喜剧片', '爱情片', '科幻片', '恐怖片', '悬疑片', '战争片', '纪录片'],
+      expanded: false
+    },
+    {
+      name: '电视剧',
+      keywords: ['电视剧', '连续剧', '剧集', '国产剧', '港剧', '台剧', '日剧', '韩剧', '美剧', '英剧', '泰剧'],
+      expanded: false
+    },
+    {
+      name: '综艺',
+      keywords: ['综艺', '娱乐', '真人秀', '脱口秀', '选秀', '访谈', '游戏', '竞技'],
+      expanded: false
+    },
+    {
+      name: '动漫',
+      keywords: ['动漫', '动画', '动画片', '卡通', '番剧', '国漫', '日漫', '美漫'],
+      expanded: false
+    },
+    {
+      name: '短剧',
+      keywords: ['短剧', '微剧', '网剧', '迷你剧', '短片'],
+      expanded: false
+    }
+  ];
 
   useEffect(() => {
     if (apiUrl) {
@@ -80,6 +117,50 @@ const Movies = () => {
     return originalUrl;
   };
 
+  const categorizeMajorCategories = (categories: Category[]) => {
+    const result: MajorCategory[] = majorCategoryDefinitions.map(def => ({
+      ...def,
+      categories: []
+    }));
+
+    // 其他分类
+    const otherCategory: MajorCategory = {
+      name: '其他',
+      keywords: [],
+      categories: [],
+      expanded: false
+    };
+
+    categories.forEach(category => {
+      let assigned = false;
+      
+      // 检查每个大分类
+      for (const majorCat of result) {
+        if (majorCat.keywords.some(keyword => 
+          category.type_name.toLowerCase().includes(keyword.toLowerCase()) ||
+          keyword.toLowerCase().includes(category.type_name.toLowerCase())
+        )) {
+          majorCat.categories.push(category);
+          assigned = true;
+          break;
+        }
+      }
+      
+      // 如果没有匹配到任何大分类，放入其他
+      if (!assigned) {
+        otherCategory.categories.push(category);
+      }
+    });
+
+    // 只返回有内容的大分类
+    const finalResult = result.filter(cat => cat.categories.length > 0);
+    if (otherCategory.categories.length > 0) {
+      finalResult.push(otherCategory);
+    }
+
+    return finalResult;
+  };
+
   const fetchCategories = async () => {
     try {
       setCategoriesLoading(true);
@@ -112,14 +193,19 @@ const Movies = () => {
       
       if (data.class && Array.isArray(data.class)) {
         setCategories(data.class);
+        const majorCats = categorizeMajorCategories(data.class);
+        setMajorCategories(majorCats);
         console.log('成功加载分类数据:', data.class.length, '个分类');
+        console.log('大分类分组:', majorCats);
       } else {
         console.log('没有找到分类数据或格式不正确');
         setCategories([]);
+        setMajorCategories([]);
       }
     } catch (error) {
       console.error('获取分类失败:', error);
       setCategories([]);
+      setMajorCategories([]);
     } finally {
       setCategoriesLoading(false);
     }
@@ -203,6 +289,12 @@ const Movies = () => {
     setCurrentPage(1);
   };
 
+  const toggleMajorCategory = (index: number) => {
+    setMajorCategories(prev => prev.map((cat, i) => 
+      i === index ? { ...cat, expanded: !cat.expanded } : cat
+    ));
+  };
+
   if (loading && movies.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
@@ -246,14 +338,16 @@ const Movies = () => {
       </div>
 
       {/* Categories Filter */}
-      {!categoriesLoading && categories.length > 0 && (
+      {!categoriesLoading && majorCategories.length > 0 && (
         <div className="bg-black/20 backdrop-blur-md border-b border-purple-500/20">
           <div className="container mx-auto px-4 py-4">
             <div className="flex items-center space-x-3 mb-4">
               <Filter className="h-5 w-5 text-purple-400" />
               <h2 className="text-lg font-semibold text-white">分类筛选</h2>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            
+            {/* 全部按钮 */}
+            <div className="mb-4">
               <Button
                 variant={selectedCategory === '' ? "default" : "ghost"}
                 onClick={() => handleCategoryChange('')}
@@ -265,20 +359,49 @@ const Movies = () => {
               >
                 全部
               </Button>
-              {categories.map((category) => (
-                <Button
-                  key={category.type_id}
-                  variant={selectedCategory === category.type_id ? "default" : "ghost"}
-                  onClick={() => handleCategoryChange(category.type_id)}
-                  className={`text-sm h-9 truncate ${
-                    selectedCategory === category.type_id 
-                      ? "bg-purple-600 hover:bg-purple-700 text-white" 
-                      : "text-white hover:bg-white/10 border border-purple-500/30"
-                  }`}
-                  title={category.type_name}
-                >
-                  {category.type_name}
-                </Button>
+            </div>
+
+            {/* 大分类 */}
+            <div className="space-y-3">
+              {majorCategories.map((majorCat, index) => (
+                <div key={majorCat.name} className="border border-purple-500/20 rounded-lg bg-white/5">
+                  {/* 大分类标题 */}
+                  <Button
+                    variant="ghost"
+                    onClick={() => toggleMajorCategory(index)}
+                    className="w-full justify-between text-white hover:bg-white/10 p-3 h-auto"
+                  >
+                    <span className="font-medium">{majorCat.name} ({majorCat.categories.length})</span>
+                    {majorCat.expanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                  
+                  {/* 小分类 */}
+                  {majorCat.expanded && (
+                    <div className="p-3 pt-0">
+                      <div className="grid grid-cols-3 gap-2">
+                        {majorCat.categories.map((category) => (
+                          <Button
+                            key={category.type_id}
+                            variant={selectedCategory === category.type_id ? "default" : "ghost"}
+                            onClick={() => handleCategoryChange(category.type_id)}
+                            className={`text-xs h-8 truncate ${
+                              selectedCategory === category.type_id 
+                                ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                                : "text-white hover:bg-white/10 border border-purple-500/30"
+                            }`}
+                            title={category.type_name}
+                          >
+                            {category.type_name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
