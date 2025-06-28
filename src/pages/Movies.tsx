@@ -123,6 +123,14 @@ const Movies = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [loading, loadingMore, hasMore, isSearching]);
 
+  // 检测API类型并处理图片URL
+  const detectApiType = (url: string) => {
+    if (url.includes('heimuer.tv') || url.includes('ajax/data')) {
+      return 'heimuer';
+    }
+    return 'standard';
+  };
+
   // 改进的图片URL处理函数
   const getImageUrl = (originalUrl: string) => {
     if (!originalUrl) {
@@ -141,11 +149,19 @@ const Movies = () => {
       return cleanUrl;
     }
     
+    // 检测API类型
+    const apiType = detectApiType(apiUrl || '');
+    
     // 如果是相对路径，尝试构建完整URL
     if (cleanUrl.startsWith('/') || cleanUrl.startsWith('./')) {
       try {
-        const apiDomain = new URL(apiUrl || '').origin;
-        const finalUrl = apiDomain + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
+        let baseUrl = '';
+        if (apiType === 'heimuer') {
+          baseUrl = 'https://heimuer.tv';
+        } else {
+          baseUrl = new URL(apiUrl || '').origin;
+        }
+        const finalUrl = baseUrl + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
         console.log('构建的完整URL:', finalUrl);
         return finalUrl;
       } catch (error) {
@@ -176,8 +192,16 @@ const Movies = () => {
     setIsSearching(true);
     
     try {
-      // 构建搜索API URL
-      let searchUrl = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&wd=${encodeURIComponent(searchTerm.trim())}`;
+      const apiType = detectApiType(apiUrl || '');
+      let searchUrl = '';
+      
+      if (apiType === 'heimuer') {
+        // 黑木耳API的搜索格式
+        searchUrl = `https://heimuer.tv/index.php/ajax/data?mid=1&wd=${encodeURIComponent(searchTerm.trim())}`;
+      } else {
+        // 标准API的搜索格式
+        searchUrl = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&wd=${encodeURIComponent(searchTerm.trim())}`;
+      }
       
       console.log('正在搜索:', searchUrl);
       
@@ -203,23 +227,28 @@ const Movies = () => {
       const data = await response.json();
       console.log('搜索结果:', data);
       
-      if (data.list && Array.isArray(data.list)) {
-        setMovies(data.list);
-        console.log('搜索成功，找到', data.list.length, '个结果');
-        
-        if (data.list.length === 0) {
-          toast({
-            title: "搜索结果",
-            description: "没有找到相关影片",
-          });
+      let searchResults = [];
+      if (apiType === 'heimuer') {
+        // 黑木耳API的数据格式
+        if (data.data && Array.isArray(data.data)) {
+          searchResults = data.data;
         }
+      } else {
+        // 标准API的数据格式
+        if (data.list && Array.isArray(data.list)) {
+          searchResults = data.list;
+        }
+      }
+      
+      if (searchResults.length > 0) {
+        setMovies(searchResults);
+        console.log('搜索成功，找到', searchResults.length, '个结果');
       } else {
         console.log('搜索结果格式错误或无结果');
         setMovies([]);
         toast({
-          title: "搜索失败",
-          description: "搜索请求失败，请稍后重试",
-          variant: "destructive"
+          title: "搜索结果",
+          description: "没有找到相关影片",
         });
       }
     } catch (error) {
@@ -265,8 +294,17 @@ const Movies = () => {
     try {
       setCategoriesLoading(true);
       
-      // 构建分类API URL
-      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=list`;
+      const apiType = detectApiType(apiUrl || '');
+      let url = '';
+      
+      if (apiType === 'heimuer') {
+        // 黑木耳API的分类格式
+        url = 'https://heimuer.tv/index.php/ajax/data?mid=1';
+      } else {
+        // 标准API的分类格式
+        url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=list`;
+      }
+      
       console.log('正在获取分类:', url);
       
       let response;
@@ -291,11 +329,24 @@ const Movies = () => {
       const data = await response.json();
       console.log('获取到的分类数据:', data);
       
-      if (data.class && Array.isArray(data.class)) {
-        setCategories(data.class);
-        const majorCats = categorizeMajorCategories(data.class);
+      let categoriesData = [];
+      if (apiType === 'heimuer') {
+        // 黑木耳API的分类数据格式
+        if (data.class && Array.isArray(data.class)) {
+          categoriesData = data.class;
+        }
+      } else {
+        // 标准API的分类数据格式
+        if (data.class && Array.isArray(data.class)) {
+          categoriesData = data.class;
+        }
+      }
+      
+      if (categoriesData.length > 0) {
+        setCategories(categoriesData);
+        const majorCats = categorizeMajorCategories(categoriesData);
         setMajorCategories(majorCats);
-        console.log('成功加载分类数据:', data.class.length, '个分类');
+        console.log('成功加载分类数据:', categoriesData.length, '个分类');
         console.log('大分类分组:', majorCats);
       } else {
         console.log('没有找到分类数据或格式不正确');
@@ -321,11 +372,21 @@ const Movies = () => {
       setCorsError(false);
       
       const page = isInitial ? 1 : currentPage;
-      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}pg=${page}`;
+      const apiType = detectApiType(apiUrl || '');
+      let url = '';
       
-      // 如果选择了分类，添加分类参数
-      if (selectedCategory) {
-        url += `&t=${selectedCategory}`;
+      if (apiType === 'heimuer') {
+        // 黑木耳API的格式
+        url = `https://heimuer.tv/index.php/ajax/data?mid=1&page=${page}&limit=20`;
+        if (selectedCategory) {
+          url += `&tid=${selectedCategory}`;
+        }
+      } else {
+        // 标准API的格式
+        url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}pg=${page}`;
+        if (selectedCategory) {
+          url += `&t=${selectedCategory}`;
+        }
       }
       
       console.log('正在请求影片:', url);
@@ -352,25 +413,38 @@ const Movies = () => {
       const data = await response.json();
       console.log('获取到的影片数据:', data);
       
-      if (data.list && Array.isArray(data.list)) {
+      let moviesList = [];
+      if (apiType === 'heimuer') {
+        // 黑木耳API的数据格式
+        if (data.data && Array.isArray(data.data)) {
+          moviesList = data.data;
+        }
+      } else {
+        // 标准API的数据格式
+        if (data.list && Array.isArray(data.list)) {
+          moviesList = data.list;
+        }
+      }
+      
+      if (moviesList.length > 0) {
         if (isInitial) {
-          setMovies(data.list);
-          setAllMovies(data.list); // 保存所有电影用于搜索
+          setMovies(moviesList);
+          setAllMovies(moviesList); // 保存所有电影用于搜索
         } else {
-          const newMovies = [...movies, ...data.list];
+          const newMovies = [...movies, ...moviesList];
           setMovies(newMovies);
           setAllMovies(newMovies); // 更新所有电影列表
         }
         
         // 检查是否还有更多数据
-        if (data.list.length === 0 || data.list.length < 20) {
+        if (moviesList.length === 0 || moviesList.length < 20) {
           setHasMore(false);
         }
         
-        console.log('成功加载影片数据:', data.list.length, '部影片');
+        console.log('成功加载影片数据:', moviesList.length, '部影片');
         
         // 打印前几个影片的图片URL用于调试
-        data.list.slice(0, 3).forEach((movie: Movie) => {
+        moviesList.slice(0, 3).forEach((movie: Movie) => {
           console.log(`影片: ${movie.vod_name}`);
           console.log(`原始图片URL: ${movie.vod_pic}`);
           console.log(`处理后URL: ${getImageUrl(movie.vod_pic)}`);

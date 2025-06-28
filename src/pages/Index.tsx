@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,7 @@ const Index = () => {
   const defaultApis = [
     {
       name: '黑木耳资源',
-      url: 'https://json.heimuer.xyz/api.php/provide/vod/?ac=list',
+      url: 'https://heimuer.tv/index.php/ajax/data?mid=1&tid=1&page=1&limit=20',
       description: '高清影视资源'
     },
     {
