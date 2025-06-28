@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle } from 'lucide-react';
+import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Movie {
@@ -27,6 +26,7 @@ const Movies = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [corsError, setCorsError] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   const apiUrl = searchParams.get('api');
 
   useEffect(() => {
@@ -40,21 +40,47 @@ const Movies = () => {
       setLoading(true);
       setCorsError(false);
       
-      // 尝试直接请求
       let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}pg=${currentPage}`;
-      let response = await fetch(url);
+      console.log('正在请求:', url);
       
-      // 如果直接请求失败，尝试使用CORS代理
-      if (!response.ok) {
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        response = await fetch(proxyUrl);
+      let response;
+      try {
+        response = await fetch(url);
+        if (!response.ok) throw new Error('Direct request failed');
+        console.log('直接请求成功');
+      } catch (error) {
+        console.log('直接请求失败，尝试使用代理...', error);
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+          response = await fetch(proxyUrl);
+          console.log('代理请求成功');
+        } catch (proxyError) {
+          console.log('代理1失败，尝试备用代理...', proxyError);
+          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+          response = await fetch(proxyUrl2);
+          console.log('备用代理请求成功');
+        }
       }
       
       const data = await response.json();
+      console.log('获取到的数据:', data);
       
       if (data.list && Array.isArray(data.list)) {
-        setMovies(data.list);
-        console.log('成功加载影片数据:', data.list.length, '部影片');
+        // 处理图片URL，确保它们是完整的URL
+        const processedMovies = data.list.map((movie: Movie) => ({
+          ...movie,
+          vod_pic: processImageUrl(movie.vod_pic)
+        }));
+        
+        setMovies(processedMovies);
+        console.log('成功加载影片数据:', processedMovies.length, '部影片');
+        
+        // 预加载图片
+        processedMovies.forEach((movie: Movie) => {
+          if (movie.vod_pic) {
+            preloadImage(movie.vod_pic, movie.vod_id);
+          }
+        });
       } else {
         console.error('数据格式错误:', data);
         toast({
@@ -66,29 +92,76 @@ const Movies = () => {
     } catch (error) {
       console.error('请求失败:', error);
       setCorsError(true);
-      
-      // 尝试使用备用CORS代理
-      try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(apiUrl + (apiUrl.includes('?') ? '&' : '?') + 'pg=' + currentPage)}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        
-        if (data.list && Array.isArray(data.list)) {
-          setMovies(data.list);
-          setCorsError(false);
-          console.log('通过代理成功加载影片数据:', data.list.length, '部影片');
-        }
-      } catch (proxyError) {
-        console.error('代理请求也失败:', proxyError);
-        toast({
-          title: "连接失败",
-          description: "无法连接到数据源，请检查API地址或网络连接",
-          variant: "destructive"
-        });
-      }
+      toast({
+        title: "连接失败",
+        description: "无法连接到数据源，请检查API地址或网络连接",
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
+  };
+
+  // 处理图片URL，确保是完整的URL
+  const processImageUrl = (picUrl: string): string => {
+    if (!picUrl) return '';
+    
+    // 如果已经是完整URL，直接返回
+    if (picUrl.startsWith('http://') || picUrl.startsWith('https://')) {
+      return picUrl;
+    }
+    
+    // 如果是相对路径，尝试补全
+    if (picUrl.startsWith('/')) {
+      // 从API URL中提取域名
+      try {
+        const apiDomain = new URL(apiUrl || '').origin;
+        return apiDomain + picUrl;
+      } catch {
+        return picUrl;
+      }
+    }
+    
+    return picUrl;
+  };
+
+  // 预加载图片并处理错误
+  const preloadImage = (src: string, movieId: string) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      console.log('图片加载成功:', src);
+    };
+    
+    img.onerror = () => {
+      console.log('图片加载失败:', src);
+      setImageErrors(prev => new Set(prev).add(movieId));
+    };
+    
+    img.src = src;
+  };
+
+  // 处理图片加载错误
+  const handleImageError = (movieId: string, originalSrc: string) => {
+    console.log('图片加载失败，尝试代理:', originalSrc);
+    setImageErrors(prev => new Set(prev).add(movieId));
+    
+    // 尝试使用图片代理服务
+    const proxyImageUrl = `https://images.weserv.nl/?url=${encodeURIComponent(originalSrc)}&w=300&h=400&fit=cover&a=attention`;
+    return proxyImageUrl;
+  };
+
+  // 获取图片URL，包含错误处理
+  const getImageUrl = (movie: Movie): string => {
+    if (imageErrors.has(movie.vod_id)) {
+      // 如果原图片失败，尝试使用代理
+      if (movie.vod_pic) {
+        return `https://images.weserv.nl/?url=${encodeURIComponent(movie.vod_pic)}&w=300&h=400&fit=cover&a=attention`;
+      }
+      return '/placeholder.svg';
+    }
+    return movie.vod_pic || '/placeholder.svg';
   };
 
   const filteredMovies = movies.filter(movie =>
@@ -179,23 +252,42 @@ const Movies = () => {
               >
                 <CardContent className="p-0">
                   <div className="relative">
-                    <img
-                      src={movie.vod_pic || '/placeholder.svg'}
-                      alt={movie.vod_name}
-                      className="w-full h-64 object-cover rounded-t-lg"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.src = '/placeholder.svg';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center rounded-t-lg">
-                      <Play className="h-12 w-12 text-white" />
-                    </div>
-                    {movie.vod_remarks && (
-                      <div className="absolute top-2 right-2 bg-purple-600 text-white px-2 py-1 rounded text-xs">
-                        {movie.vod_remarks}
+                    <div className="w-full h-64 bg-gray-800 rounded-t-lg overflow-hidden relative">
+                      {movie.vod_pic ? (
+                        <img
+                          src={getImageUrl(movie)}
+                          alt={movie.vod_name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            if (!imageErrors.has(movie.vod_id)) {
+                              // 第一次失败，尝试代理
+                              target.src = handleImageError(movie.vod_id, movie.vod_pic);
+                            } else {
+                              // 代理也失败，使用占位图
+                              target.src = '/placeholder.svg';
+                            }
+                          }}
+                          onLoad={() => {
+                            console.log('图片显示成功:', movie.vod_name);
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-700">
+                          <Image className="h-16 w-16 text-gray-500" />
+                        </div>
+                      )}
+                      
+                      <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <Play className="h-12 w-12 text-white" />
                       </div>
-                    )}
+                      
+                      {movie.vod_remarks && (
+                        <div className="absolute top-2 right-2 bg-purple-600 text-white px-2 py-1 rounded text-xs">
+                          {movie.vod_remarks}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="p-4">
                     <h3 className="text-white font-semibold mb-2 line-clamp-2 h-12">
