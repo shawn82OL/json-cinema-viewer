@@ -34,6 +34,28 @@ const Movies = () => {
     }
   }, [apiUrl, currentPage]);
 
+  const getImageUrl = (originalUrl: string) => {
+    if (!originalUrl) return '/placeholder.svg';
+    
+    // 如果是相对路径，尝试构建完整URL
+    if (originalUrl.startsWith('/') || originalUrl.startsWith('./')) {
+      // 从API URL中提取域名
+      try {
+        const apiDomain = new URL(apiUrl || '').origin;
+        return apiDomain + originalUrl;
+      } catch {
+        return originalUrl;
+      }
+    }
+    
+    // 如果URL不是以http开头，添加https
+    if (!originalUrl.startsWith('http')) {
+      return 'https://' + originalUrl;
+    }
+    
+    return originalUrl;
+  };
+
   const fetchMovies = async () => {
     try {
       setLoading(true);
@@ -70,7 +92,7 @@ const Movies = () => {
         
         // 打印前几个影片的图片URL用于调试
         data.list.slice(0, 3).forEach((movie: Movie) => {
-          console.log(`影片: ${movie.vod_name}, 图片URL: ${movie.vod_pic}`);
+          console.log(`影片: ${movie.vod_name}, 原始图片URL: ${movie.vod_pic}, 处理后: ${getImageUrl(movie.vod_pic)}`);
         });
       } else {
         console.error('数据格式错误:', data);
@@ -184,18 +206,21 @@ const Movies = () => {
                     <div className="w-full h-64 bg-gray-800 rounded-t-lg overflow-hidden relative">
                       {movie.vod_pic ? (
                         <img
-                          src={movie.vod_pic}
+                          src={getImageUrl(movie.vod_pic)}
                           alt={movie.vod_name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             const target = e.target as HTMLImageElement;
                             console.log('图片加载失败，原始URL:', movie.vod_pic);
+                            console.log('处理后URL:', getImageUrl(movie.vod_pic));
                             
                             // 尝试不同的图片代理服务
+                            const originalUrl = movie.vod_pic;
                             const proxyUrls = [
-                              `https://images.weserv.nl/?url=${encodeURIComponent(movie.vod_pic)}&w=300&h=400&fit=cover`,
-                              `https://wsrv.nl/?url=${encodeURIComponent(movie.vod_pic)}&w=300&h=400&fit=cover`,
-                              `https://api.allorigins.win/raw?url=${encodeURIComponent(movie.vod_pic)}`,
+                              `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
+                              `https://wsrv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
+                              `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`,
+                              `https://corsproxy.io/?${encodeURIComponent(originalUrl)}`,
                               '/placeholder.svg'
                             ];
                             

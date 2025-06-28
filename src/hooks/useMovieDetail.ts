@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { MovieDetail, PlayUrl } from '@/types/movie';
@@ -20,16 +19,18 @@ export const useMovieDetail = (apiUrl: string | null, movieId: string | null) =>
     const episodes = playUrl.split('#');
     const urls: PlayUrl[] = [];
     
-    episodes.forEach((episode) => {
+    episodes.forEach((episode, index) => {
       const parts = episode.split('$');
       if (parts.length >= 2) {
-        const episodeNum = parts[0];
+        const episodeName = parts[0];
         const episodeUrl = parts[1];
+        
+        // 保持原始的集数名称，但在显示时会被简化
         urls.push({
-          name: `第${episodeNum}集`,
+          name: episodeName || `第${index + 1}集`,
           url: episodeUrl.trim()
         });
-        console.log(`添加集数: 第${episodeNum}集, 链接: ${episodeUrl.trim()}`);
+        console.log(`添加集数: ${episodeName}, 链接: ${episodeUrl.trim()}`);
       }
     });
     
