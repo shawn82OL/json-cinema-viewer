@@ -218,9 +218,14 @@ const Movies = () => {
           console.log('搜索代理请求成功');
         } catch (proxyError) {
           console.log('搜索代理1失败，尝试备用代理...', proxyError);
-          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
-          response = await fetch(proxyUrl2);
-          console.log('搜索备用代理请求成功');
+          try {
+            const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
+            response = await fetch(proxyUrl2);
+            console.log('搜索备用代理请求成功');
+          } catch (finalError) {
+            console.log('所有搜索代理都失败:', finalError);
+            throw finalError;
+          }
         }
       }
       
@@ -320,9 +325,14 @@ const Movies = () => {
           console.log('分类代理请求成功');
         } catch (proxyError) {
           console.log('分类代理1失败，尝试备用代理...', proxyError);
-          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-          response = await fetch(proxyUrl2);
-          console.log('分类备用代理请求成功');
+          try {
+            const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            response = await fetch(proxyUrl2);
+            console.log('分类备用代理请求成功');
+          } catch (finalError) {
+            console.log('所有分类代理都失败:', finalError);
+            throw finalError;
+          }
         }
       }
       
@@ -404,9 +414,14 @@ const Movies = () => {
           console.log('影片代理请求成功');
         } catch (proxyError) {
           console.log('影片代理1失败，尝试备用代理...', proxyError);
-          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-          response = await fetch(proxyUrl2);
-          console.log('影片备用代理请求成功');
+          try {
+            const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            response = await fetch(proxyUrl2);
+            console.log('影片备用代理请求成功');
+          } catch (finalError) {
+            console.log('所有影片代理都失败:', finalError);
+            throw finalError;
+          }
         }
       }
       

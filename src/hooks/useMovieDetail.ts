@@ -102,9 +102,14 @@ export const useMovieDetail = (apiUrl: string | null, movieId: string | null) =>
           console.log('代理请求成功');
         } catch (proxyError) {
           console.log('代理1失败，尝试备用代理...', proxyError);
-          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-          response = await fetch(proxyUrl2);
-          console.log('备用代理请求成功');
+          try {
+            const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            response = await fetch(proxyUrl2);
+            console.log('备用代理请求成功');
+          } catch (finalError) {
+            console.log('所有代理都失败:', finalError);
+            throw finalError;
+          }
         }
       }
       
