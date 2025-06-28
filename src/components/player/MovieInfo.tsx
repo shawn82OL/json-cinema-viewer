@@ -11,27 +11,35 @@ export const MovieInfo: React.FC<MovieInfoProps> = ({ movie }) => {
   const getImageUrl = (originalUrl: string) => {
     if (!originalUrl) return '/placeholder.svg';
     
+    // 清理URL，移除多余的空格和特殊字符
+    let cleanUrl = originalUrl.trim();
+    
+    // 如果已经是完整的HTTP/HTTPS URL，直接返回
+    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+      return cleanUrl;
+    }
+    
     // 如果是相对路径，尝试构建完整URL
-    if (originalUrl.startsWith('/') || originalUrl.startsWith('./')) {
+    if (cleanUrl.startsWith('/') || cleanUrl.startsWith('./')) {
       // 从当前页面URL中提取可能的域名信息
       const currentUrl = window.location.href;
       const apiParam = new URLSearchParams(window.location.search).get('api');
       if (apiParam) {
         try {
           const apiDomain = new URL(apiParam).origin;
-          return apiDomain + originalUrl;
+          return apiDomain + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
         } catch {
-          return originalUrl;
+          return cleanUrl;
         }
       }
     }
     
     // 如果URL不是以http开头，添加https
-    if (!originalUrl.startsWith('http')) {
-      return 'https://' + originalUrl;
+    if (!cleanUrl.startsWith('http')) {
+      return 'https://' + cleanUrl;
     }
     
-    return originalUrl;
+    return cleanUrl;
   };
 
   return (
@@ -44,6 +52,7 @@ export const MovieInfo: React.FC<MovieInfoProps> = ({ movie }) => {
                 src={getImageUrl(movie.vod_pic)}
                 alt={movie.vod_name}
                 className="w-full h-full object-cover"
+                loading="lazy"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   console.log('播放页海报加载失败，原始URL:', movie.vod_pic);
@@ -52,10 +61,11 @@ export const MovieInfo: React.FC<MovieInfoProps> = ({ movie }) => {
                   // 尝试不同的图片代理服务
                   const originalUrl = movie.vod_pic;
                   const proxyUrls = [
-                    `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
+                    `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover&output=webp`,
                     `https://wsrv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
                     `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`,
                     `https://corsproxy.io/?${encodeURIComponent(originalUrl)}`,
+                    `https://proxy.cors.sh/${originalUrl}`,
                     '/placeholder.svg'
                   ];
                   

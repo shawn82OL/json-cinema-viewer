@@ -36,12 +36,14 @@ const Movies = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [allMovies, setAllMovies] = useState<Movie[]>([]); // 存储所有电影用于搜索
   const [categories, setCategories] = useState<Category[]>([]);
   const [majorCategories, setMajorCategories] = useState<MajorCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedMajorCategory, setSelectedMajorCategory] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -94,13 +96,24 @@ const Movies = () => {
     }
   }, [selectedCategory]);
 
+  // 搜索功能
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      handleSearch();
+    } else {
+      // 如果搜索词为空，显示所有电影
+      setMovies(allMovies);
+      setIsSearching(false);
+    }
+  }, [searchTerm, allMovies]);
+
   // 无限滚动监听
   useEffect(() => {
     const handleScroll = () => {
       if (
         window.innerHeight + document.documentElement.scrollTop
         >= document.documentElement.offsetHeight - 1000 // 提前1000px开始加载
-        && !loading && !loadingMore && hasMore
+        && !loading && !loadingMore && hasMore && !isSearching
       ) {
         loadMoreMovies();
       }
@@ -108,28 +121,104 @@ const Movies = () => {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [loading, loadingMore, hasMore]);
+  }, [loading, loadingMore, hasMore, isSearching]);
 
+  // 改进的图片URL处理函数
   const getImageUrl = (originalUrl: string) => {
     if (!originalUrl) return '/placeholder.svg';
     
+    // 清理URL，移除多余的空格和特殊字符
+    let cleanUrl = originalUrl.trim();
+    
+    // 如果已经是完整的HTTP/HTTPS URL，直接返回
+    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+      return cleanUrl;
+    }
+    
     // 如果是相对路径，尝试构建完整URL
-    if (originalUrl.startsWith('/') || originalUrl.startsWith('./')) {
-      // 从API URL中提取域名
+    if (cleanUrl.startsWith('/') || cleanUrl.startsWith('./')) {
       try {
         const apiDomain = new URL(apiUrl || '').origin;
-        return apiDomain + originalUrl;
+        return apiDomain + (cleanUrl.startsWith('./') ? cleanUrl.substring(1) : cleanUrl);
       } catch {
-        return originalUrl;
+        return cleanUrl;
       }
     }
     
     // 如果URL不是以http开头，添加https
-    if (!originalUrl.startsWith('http')) {
-      return 'https://' + originalUrl;
+    if (!cleanUrl.startsWith('http')) {
+      return 'https://' + cleanUrl;
     }
     
-    return originalUrl;
+    return cleanUrl;
+  };
+
+  // 搜索处理函数
+  const handleSearch = async () => {
+    if (!searchTerm.trim()) {
+      setMovies(allMovies);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    
+    try {
+      // 构建搜索API URL
+      let searchUrl = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}ac=detail&wd=${encodeURIComponent(searchTerm.trim())}`;
+      
+      console.log('正在搜索:', searchUrl);
+      
+      let response;
+      try {
+        response = await fetch(searchUrl);
+        if (!response.ok) throw new Error('Direct search request failed');
+        console.log('搜索直接请求成功');
+      } catch (error) {
+        console.log('搜索直接请求失败，尝试使用代理...', error);
+        try {
+          const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
+          response = await fetch(proxyUrl);
+          console.log('搜索代理请求成功');
+        } catch (proxyError) {
+          console.log('搜索代理1失败，尝试备用代理...', proxyError);
+          const proxyUrl2 = `https://corsproxy.io/?${encodeURIComponent(searchUrl)}`;
+          response = await fetch(proxyUrl2);
+          console.log('搜索备用代理请求成功');
+        }
+      }
+      
+      const data = await response.json();
+      console.log('搜索结果:', data);
+      
+      if (data.list && Array.isArray(data.list)) {
+        setMovies(data.list);
+        console.log('搜索成功，找到', data.list.length, '个结果');
+        
+        if (data.list.length === 0) {
+          toast({
+            title: "搜索结果",
+            description: "没有找到相关影片",
+          });
+        }
+      } else {
+        console.log('搜索结果格式错误或无结果');
+        setMovies([]);
+        toast({
+          title: "搜索失败",
+          description: "搜索请求失败，请稍后重试",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('搜索失败:', error);
+      setMovies([]);
+      toast({
+        title: "搜索错误",
+        description: "搜索时发生错误，请检查网络连接",
+        variant: "destructive"
+      });
+    }
   };
 
   const categorizeMajorCategories = (categories: Category[]) => {
@@ -254,8 +343,11 @@ const Movies = () => {
       if (data.list && Array.isArray(data.list)) {
         if (isInitial) {
           setMovies(data.list);
+          setAllMovies(data.list); // 保存所有电影用于搜索
         } else {
-          setMovies(prev => [...prev, ...data.list]);
+          const newMovies = [...movies, ...data.list];
+          setMovies(newMovies);
+          setAllMovies(newMovies); // 更新所有电影列表
         }
         
         // 检查是否还有更多数据
@@ -296,7 +388,7 @@ const Movies = () => {
   };
 
   const loadMoreMovies = useCallback(() => {
-    if (!loading && !loadingMore && hasMore) {
+    if (!loading && !loadingMore && hasMore && !isSearching) {
       setCurrentPage(prev => {
         const nextPage = prev + 1;
         // 延迟执行以确保状态更新
@@ -304,11 +396,7 @@ const Movies = () => {
         return nextPage;
       });
     }
-  }, [loading, loadingMore, hasMore]);
-
-  const filteredMovies = movies.filter(movie =>
-    movie.vod_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  }, [loading, loadingMore, hasMore, isSearching]);
 
   const handleMovieClick = (movie: Movie) => {
     navigate(`/player?api=${encodeURIComponent(apiUrl || '')}&id=${movie.vod_id}`);
@@ -316,6 +404,8 @@ const Movies = () => {
 
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategory(categoryId);
+    setSearchTerm(''); // 清除搜索词
+    setIsSearching(false);
   };
 
   const handleMajorCategoryClick = (majorCatName: string) => {
@@ -328,6 +418,8 @@ const Movies = () => {
       setSelectedMajorCategory(majorCatName);
       setSelectedCategory(''); // 清除小分类选择
     }
+    setSearchTerm(''); // 清除搜索词
+    setIsSearching(false);
   };
 
   // 获取当前选中大分类的小分类
@@ -396,6 +488,8 @@ const Movies = () => {
                   onClick={() => {
                     setSelectedMajorCategory('');
                     setSelectedCategory('');
+                    setSearchTerm('');
+                    setIsSearching(false);
                   }}
                   className={`text-sm h-9 ${
                     selectedMajorCategory === '' 
@@ -477,12 +571,23 @@ const Movies = () => {
         </div>
       )}
 
+      {/* Search Status */}
+      {isSearching && searchTerm && (
+        <div className="container mx-auto px-4 py-2">
+          <div className="text-center">
+            <p className="text-white text-sm">
+              搜索 "{searchTerm}" 的结果 ({movies.length} 个结果)
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Movies Grid */}
       <div className="container mx-auto px-4 py-8">
         {movies.length > 0 ? (
           <>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
-              {filteredMovies.map((movie) => (
+              {movies.map((movie) => (
                 <Card
                   key={movie.vod_id}
                   className="bg-white/10 backdrop-blur-md border-purple-500/20 hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-105"
@@ -496,6 +601,7 @@ const Movies = () => {
                             src={getImageUrl(movie.vod_pic)}
                             alt={movie.vod_name}
                             className="w-full h-full object-cover"
+                            loading="lazy"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               console.log('图片加载失败，原始URL:', movie.vod_pic);
@@ -504,10 +610,11 @@ const Movies = () => {
                               // 尝试不同的图片代理服务
                               const originalUrl = movie.vod_pic;
                               const proxyUrls = [
-                                `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
+                                `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover&output=webp`,
                                 `https://wsrv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
                                 `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`,
                                 `https://corsproxy.io/?${encodeURIComponent(originalUrl)}`,
+                                `https://proxy.cors.sh/${originalUrl}`,
                                 '/placeholder.svg'
                               ];
                               
@@ -576,7 +683,7 @@ const Movies = () => {
             )}
 
             {/* No More Data Indicator */}
-            {!hasMore && movies.length > 0 && (
+            {!hasMore && movies.length > 0 && !isSearching && (
               <div className="text-center mt-8">
                 <p className="text-gray-400">已加载全部内容</p>
               </div>
@@ -585,14 +692,20 @@ const Movies = () => {
         ) : (
           !loading && (
             <div className="text-center text-white py-12">
-              <p className="text-xl">没有找到相关影片</p>
-              <p className="text-gray-400 mt-2">请检查API地址或尝试重新加载</p>
-              <Button 
-                onClick={() => fetchMovies(true)}
-                className="mt-4 bg-purple-600 hover:bg-purple-700"
-              >
-                重新加载
-              </Button>
+              <p className="text-xl">
+                {isSearching ? `没有找到包含 "${searchTerm}" 的影片` : '没有找到相关影片'}
+              </p>
+              <p className="text-gray-400 mt-2">
+                {isSearching ? '请尝试其他关键词' : '请检查API地址或尝试重新加载'}
+              </p>
+              {!isSearching && (
+                <Button 
+                  onClick={() => fetchMovies(true)}
+                  className="mt-4 bg-purple-600 hover:bg-purple-700"
+                >
+                  重新加载
+                </Button>
+              )}
             </div>
           )
         )}
