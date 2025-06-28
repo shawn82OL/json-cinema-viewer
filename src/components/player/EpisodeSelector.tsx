@@ -78,8 +78,8 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         
         <Tabs defaultValue={defaultTab} className="w-full">
           {/* 使用ScrollArea包装TabsList以支持横向滚动 */}
-          <ScrollArea className="w-full">
-            <TabsList className="inline-flex h-10 items-center justify-start rounded-md bg-black/30 p-1 text-muted-foreground min-w-full">
+          <ScrollArea className="w-full whitespace-nowrap">
+            <TabsList className="inline-flex h-10 items-center justify-start rounded-md bg-black/30 p-1 text-muted-foreground w-max">
               {pages.map((page, index) => (
                 <TabsTrigger 
                   key={index} 
@@ -94,27 +94,30 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           
           {pages.map((page, pageIndex) => (
             <TabsContent key={pageIndex} value={pageIndex.toString()} className="mt-3">
-              <div className="grid grid-cols-2 gap-2">
-                {page.episodes.map((episode, episodeIndex) => {
-                  const globalIndex = page.startIndex + episodeIndex;
-                  return (
-                    <Button
-                      key={globalIndex}
-                      variant={currentUrl === episode.url ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => onEpisodeSelect(episode.url)}
-                      className={`text-xs h-8 px-2 truncate ${
-                        currentUrl === episode.url 
-                          ? "bg-purple-600 hover:bg-purple-700 text-white" 
-                          : "text-white hover:bg-white/10 border border-purple-500/30"
-                      }`}
-                      title={episode.name}
-                    >
-                      {episode.name}
-                    </Button>
-                  );
-                })}
-              </div>
+              {/* 为集数内容区域添加最大高度和滚动 */}
+              <ScrollArea className="h-[300px] w-full">
+                <div className="grid grid-cols-2 gap-2 pr-4">
+                  {page.episodes.map((episode, episodeIndex) => {
+                    const globalIndex = page.startIndex + episodeIndex;
+                    return (
+                      <Button
+                        key={globalIndex}
+                        variant={currentUrl === episode.url ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => onEpisodeSelect(episode.url)}
+                        className={`text-xs h-8 px-2 truncate ${
+                          currentUrl === episode.url 
+                            ? "bg-purple-600 hover:bg-purple-700 text-white" 
+                            : "text-white hover:bg-white/10 border border-purple-500/30"
+                        }`}
+                        title={episode.name}
+                      >
+                        {episode.name}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </TabsContent>
           ))}
         </Tabs>
