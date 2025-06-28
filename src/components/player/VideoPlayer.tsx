@@ -108,11 +108,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
 
         artRef.current.on('error', (error) => {
           console.error('播放器错误:', error);
-          toast({
-            title: "播放错误",
-            description: "视频加载失败，请尝试其他播放源或稍后重试",
-            variant: "destructive"
-          });
+          
+          // 尝试使用代理播放
+          if (!playUrl.includes('proxy')) {
+            console.log('尝试使用代理播放...');
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(currentUrl)}`;
+            
+            if (artRef.current) {
+              artRef.current.switchUrl(proxyUrl);
+            }
+          } else {
+            toast({
+              title: "播放错误",
+              description: "视频加载失败，请尝试其他播放源或稍后重试",
+              variant: "destructive"
+            });
+          }
         });
 
       } catch (error) {
