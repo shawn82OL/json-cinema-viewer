@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, Search, ArrowLeft, Play, Calendar, Star, AlertCircle, Image, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Movie {
@@ -39,11 +39,13 @@ const Movies = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [majorCategories, setMajorCategories] = useState<MajorCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedMajorCategory, setSelectedMajorCategory] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [corsError, setCorsError] = useState(false);
   const apiUrl = searchParams.get('api');
 
@@ -79,22 +81,34 @@ const Movies = () => {
   useEffect(() => {
     if (apiUrl) {
       fetchCategories();
-      fetchMovies();
+      fetchMovies(true); // 初始加载
     }
   }, [apiUrl]);
 
   useEffect(() => {
-    if (apiUrl && selectedCategory) {
+    if (apiUrl && selectedCategory !== undefined) {
+      setMovies([]); // 清空现有影片
       setCurrentPage(1);
-      fetchMovies();
+      setHasMore(true);
+      fetchMovies(true); // 重新加载
     }
   }, [selectedCategory]);
 
+  // 无限滚动监听
   useEffect(() => {
-    if (apiUrl) {
-      fetchMovies();
-    }
-  }, [currentPage]);
+    const handleScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop
+        >= document.documentElement.offsetHeight - 1000 // 提前1000px开始加载
+        && !loading && !loadingMore && hasMore
+      ) {
+        loadMoreMovies();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [loading, loadingMore, hasMore]);
 
   const getImageUrl = (originalUrl: string) => {
     if (!originalUrl) return '/placeholder.svg';
@@ -196,12 +210,17 @@ const Movies = () => {
     }
   };
 
-  const fetchMovies = async () => {
+  const fetchMovies = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
       setCorsError(false);
       
-      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}pg=${currentPage}`;
+      const page = isInitial ? 1 : currentPage;
+      let url = `${apiUrl}${apiUrl.includes('?') ? '&' : '?'}pg=${page}`;
       
       // 如果选择了分类，添加分类参数
       if (selectedCategory) {
@@ -233,7 +252,17 @@ const Movies = () => {
       console.log('获取到的影片数据:', data);
       
       if (data.list && Array.isArray(data.list)) {
-        setMovies(data.list);
+        if (isInitial) {
+          setMovies(data.list);
+        } else {
+          setMovies(prev => [...prev, ...data.list]);
+        }
+        
+        // 检查是否还有更多数据
+        if (data.list.length === 0 || data.list.length < 20) {
+          setHasMore(false);
+        }
+        
         console.log('成功加载影片数据:', data.list.length, '部影片');
         
         // 打印前几个影片的图片URL用于调试
@@ -242,24 +271,40 @@ const Movies = () => {
         });
       } else {
         console.error('影片数据格式错误:', data);
-        toast({
-          title: "数据格式错误",
-          description: "API返回的数据格式不正确",
-          variant: "destructive"
-        });
+        if (isInitial) {
+          toast({
+            title: "数据格式错误",
+            description: "API返回的数据格式不正确",
+            variant: "destructive"
+          });
+        }
       }
     } catch (error) {
       console.error('请求影片失败:', error);
       setCorsError(true);
-      toast({
-        title: "连接失败",
-        description: "无法连接到数据源，请检查API地址或网络连接",
-        variant: "destructive"
-      });
+      if (isInitial) {
+        toast({
+          title: "连接失败",
+          description: "无法连接到数据源，请检查API地址或网络连接",
+          variant: "destructive"
+        });
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
+
+  const loadMoreMovies = useCallback(() => {
+    if (!loading && !loadingMore && hasMore) {
+      setCurrentPage(prev => {
+        const nextPage = prev + 1;
+        // 延迟执行以确保状态更新
+        setTimeout(() => fetchMovies(false), 0);
+        return nextPage;
+      });
+    }
+  }, [loading, loadingMore, hasMore]);
 
   const filteredMovies = movies.filter(movie =>
     movie.vod_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -271,7 +316,6 @@ const Movies = () => {
 
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    setCurrentPage(1);
   };
 
   const handleMajorCategoryClick = (majorCatName: string) => {
@@ -284,7 +328,6 @@ const Movies = () => {
       setSelectedMajorCategory(majorCatName);
       setSelectedCategory(''); // 清除小分类选择
     }
-    setCurrentPage(1);
   };
 
   // 获取当前选中大分类的小分类
@@ -353,7 +396,6 @@ const Movies = () => {
                   onClick={() => {
                     setSelectedMajorCategory('');
                     setSelectedCategory('');
-                    setCurrentPage(1);
                   }}
                   className={`text-sm h-9 ${
                     selectedMajorCategory === '' 
@@ -422,7 +464,7 @@ const Movies = () => {
                     由于浏览器安全限制，无法直接访问该API。正在尝试使用代理服务...
                   </p>
                   <Button 
-                    onClick={fetchMovies}
+                    onClick={() => fetchMovies(true)}
                     size="sm"
                     className="bg-yellow-600 hover:bg-yellow-700"
                   >
@@ -435,141 +477,124 @@ const Movies = () => {
         </div>
       )}
 
-      {/* Loading indicator for category change */}
-      {loading && movies.length > 0 && (
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-purple-400 mr-2" />
-            <span className="text-white">正在加载...</span>
-          </div>
-        </div>
-      )}
-
       {/* Movies Grid */}
       <div className="container mx-auto px-4 py-8">
         {movies.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-            {filteredMovies.map((movie) => (
-              <Card
-                key={movie.vod_id}
-                className="bg-white/10 backdrop-blur-md border-purple-500/20 hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-105"
-                onClick={() => handleMovieClick(movie)}
-              >
-                <CardContent className="p-0">
-                  <div className="relative">
-                    <div className="w-full h-64 bg-gray-800 rounded-t-lg overflow-hidden relative">
-                      {movie.vod_pic ? (
-                        <img
-                          src={getImageUrl(movie.vod_pic)}
-                          alt={movie.vod_name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            console.log('图片加载失败，原始URL:', movie.vod_pic);
-                            console.log('处理后URL:', getImageUrl(movie.vod_pic));
-                            
-                            // 尝试不同的图片代理服务
-                            const originalUrl = movie.vod_pic;
-                            const proxyUrls = [
-                              `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
-                              `https://wsrv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
-                              `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`,
-                              `https://corsproxy.io/?${encodeURIComponent(originalUrl)}`,
-                              '/placeholder.svg'
-                            ];
-                            
-                            // 获取当前尝试的代理索引
-                            const currentIndex = target.dataset.proxyIndex ? parseInt(target.dataset.proxyIndex) : 0;
-                            
-                            if (currentIndex < proxyUrls.length - 1) {
-                              target.dataset.proxyIndex = (currentIndex + 1).toString();
-                              target.src = proxyUrls[currentIndex + 1];
-                              console.log(`尝试代理 ${currentIndex + 1}:`, proxyUrls[currentIndex + 1]);
-                            } else {
-                              console.log('所有代理都失败，使用占位图');
-                              target.src = '/placeholder.svg';
-                            }
-                          }}
-                          onLoad={() => {
-                            console.log('图片加载成功:', movie.vod_name);
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-700">
-                          <Image className="h-16 w-16 text-gray-500" />
-                          <span className="text-gray-400 text-sm ml-2">暂无海报</span>
+          <>
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-4">
+              {filteredMovies.map((movie) => (
+                <Card
+                  key={movie.vod_id}
+                  className="bg-white/10 backdrop-blur-md border-purple-500/20 hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-105"
+                  onClick={() => handleMovieClick(movie)}
+                >
+                  <CardContent className="p-0">
+                    <div className="relative">
+                      <div className="w-full aspect-[3/4] bg-gray-800 rounded-t-lg overflow-hidden relative">
+                        {movie.vod_pic ? (
+                          <img
+                            src={getImageUrl(movie.vod_pic)}
+                            alt={movie.vod_name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              console.log('图片加载失败，原始URL:', movie.vod_pic);
+                              console.log('处理后URL:', getImageUrl(movie.vod_pic));
+                              
+                              // 尝试不同的图片代理服务
+                              const originalUrl = movie.vod_pic;
+                              const proxyUrls = [
+                                `https://images.weserv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
+                                `https://wsrv.nl/?url=${encodeURIComponent(originalUrl)}&w=300&h=400&fit=cover`,
+                                `https://api.allorigins.win/raw?url=${encodeURIComponent(originalUrl)}`,
+                                `https://corsproxy.io/?${encodeURIComponent(originalUrl)}`,
+                                '/placeholder.svg'
+                              ];
+                              
+                              // 获取当前尝试的代理索引
+                              const currentIndex = target.dataset.proxyIndex ? parseInt(target.dataset.proxyIndex) : 0;
+                              
+                              if (currentIndex < proxyUrls.length - 1) {
+                                target.dataset.proxyIndex = (currentIndex + 1).toString();
+                                target.src = proxyUrls[currentIndex + 1];
+                                console.log(`尝试代理 ${currentIndex + 1}:`, proxyUrls[currentIndex + 1]);
+                              } else {
+                                console.log('所有代理都失败，使用占位图');
+                                target.src = '/placeholder.svg';
+                              }
+                            }}
+                            onLoad={() => {
+                              console.log('图片加载成功:', movie.vod_name);
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-gray-700">
+                            <Image className="h-8 w-8 text-gray-500 mb-1" />
+                            <span className="text-gray-400 text-xs text-center px-1">暂无海报</span>
+                          </div>
+                        )}
+                        
+                        <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <Play className="h-8 w-8 text-white" />
                         </div>
-                      )}
-                      
-                      <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <Play className="h-12 w-12 text-white" />
+                        
+                        {movie.vod_remarks && (
+                          <div className="absolute top-1 right-1 bg-purple-600 text-white px-1 py-0.5 rounded text-xs">
+                            {movie.vod_remarks}
+                          </div>
+                        )}
                       </div>
-                      
-                      {movie.vod_remarks && (
-                        <div className="absolute top-2 right-2 bg-purple-600 text-white px-2 py-1 rounded text-xs">
-                          {movie.vod_remarks}
-                        </div>
-                      )}
                     </div>
-                  </div>
-                  <div className="p-4">
-                    <h3 className="text-white font-semibold mb-2 line-clamp-2 h-12">
-                      {movie.vod_name}
-                    </h3>
-                    <div className="flex items-center justify-between text-sm text-gray-300">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-3 w-3" />
-                        <span>{movie.vod_year || '未知'}</span>
-                      </div>
-                      {movie.vod_score && (
+                    <div className="p-2">
+                      <h3 className="text-white font-medium text-sm mb-1 line-clamp-2 h-10 leading-5">
+                        {movie.vod_name}
+                      </h3>
+                      <div className="flex items-center justify-between text-xs text-gray-300">
                         <div className="flex items-center space-x-1">
-                          <Star className="h-3 w-3 text-yellow-500" />
-                          <span>{movie.vod_score}</span>
+                          <Calendar className="h-3 w-3" />
+                          <span>{movie.vod_year || '未知'}</span>
                         </div>
-                      )}
+                        {movie.vod_score && (
+                          <div className="flex items-center space-x-1">
+                            <Star className="h-3 w-3 text-yellow-500" />
+                            <span>{movie.vod_score}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Loading More Indicator */}
+            {loadingMore && (
+              <div className="flex items-center justify-center mt-8">
+                <Loader2 className="h-6 w-6 animate-spin text-purple-400 mr-2" />
+                <span className="text-white">正在加载更多...</span>
+              </div>
+            )}
+
+            {/* No More Data Indicator */}
+            {!hasMore && movies.length > 0 && (
+              <div className="text-center mt-8">
+                <p className="text-gray-400">已加载全部内容</p>
+              </div>
+            )}
+          </>
         ) : (
           !loading && (
             <div className="text-center text-white py-12">
               <p className="text-xl">没有找到相关影片</p>
               <p className="text-gray-400 mt-2">请检查API地址或尝试重新加载</p>
               <Button 
-                onClick={fetchMovies}
+                onClick={() => fetchMovies(true)}
                 className="mt-4 bg-purple-600 hover:bg-purple-700"
               >
                 重新加载
               </Button>
             </div>
           )
-        )}
-
-        {/* Pagination */}
-        {movies.length > 0 && (
-          <div className="flex justify-center mt-8 space-x-2">
-            <Button
-              variant="ghost"
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="text-white hover:bg-white/10"
-            >
-              上一页
-            </Button>
-            <span className="text-white flex items-center px-4">
-              第 {currentPage} 页
-            </span>
-            <Button
-              variant="ghost"
-              onClick={() => setCurrentPage(currentPage + 1)}
-              className="text-white hover:bg-white/10"
-            >
-              下一页
-            </Button>
-          </div>
         )}
       </div>
     </div>
