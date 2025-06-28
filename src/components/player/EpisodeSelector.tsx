@@ -25,7 +25,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           <h3 className="text-white text-base font-semibold mb-3">
             选集播放 ({playUrls.length}集)
           </h3>
-          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {playUrls.map((episode, index) => (
               <Button
                 key={index}
@@ -39,7 +39,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                 }`}
                 title={episode.name}
               >
-                {index + 1}
+                {episode.name}
               </Button>
             ))}
           </div>
@@ -90,7 +90,7 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           
           {pages.map((page, pageIndex) => (
             <TabsContent key={pageIndex} value={pageIndex.toString()} className="mt-3">
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {page.episodes.map((episode, episodeIndex) => {
                   const globalIndex = page.startIndex + episodeIndex;
                   return (
@@ -99,14 +99,14 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                       variant={currentUrl === episode.url ? "default" : "ghost"}
                       size="sm"
                       onClick={() => onEpisodeSelect(episode.url)}
-                      className={`text-xs h-8 px-2 ${
+                      className={`text-xs h-8 px-2 truncate ${
                         currentUrl === episode.url 
                           ? "bg-purple-600 hover:bg-purple-700 text-white" 
                           : "text-white hover:bg-white/10 border border-purple-500/30"
                       }`}
                       title={episode.name}
                     >
-                      {globalIndex + 1}
+                      {episode.name}
                     </Button>
                   );
                 })}
