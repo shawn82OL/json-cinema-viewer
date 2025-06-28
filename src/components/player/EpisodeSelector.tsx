@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { PlayUrl } from '@/types/movie';
 
 interface EpisodeSelectorProps {
@@ -76,17 +77,20 @@ export const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         </h3>
         
         <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="grid w-full bg-black/30" style={{ gridTemplateColumns: `repeat(${totalPages}, minmax(0, 1fr))` }}>
-            {pages.map((page, index) => (
-              <TabsTrigger 
-                key={index} 
-                value={index.toString()}
-                className="text-xs data-[state=active]:bg-purple-600 data-[state=active]:text-white"
-              >
-                {page.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          {/* 使用ScrollArea包装TabsList以支持横向滚动 */}
+          <ScrollArea className="w-full">
+            <TabsList className="inline-flex h-10 items-center justify-start rounded-md bg-black/30 p-1 text-muted-foreground min-w-full">
+              {pages.map((page, index) => (
+                <TabsTrigger 
+                  key={index} 
+                  value={index.toString()}
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-xs font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-sm flex-shrink-0 mr-1"
+                >
+                  {page.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </ScrollArea>
           
           {pages.map((page, pageIndex) => (
             <TabsContent key={pageIndex} value={pageIndex.toString()} className="mt-3">
