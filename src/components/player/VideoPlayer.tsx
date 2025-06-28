@@ -13,6 +13,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
   const playerRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<Artplayer | null>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const proxyAttemptRef = useRef<number>(0);
+
+  // List of proxy services to try in order
+  const proxyUrls = [
+    (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    (url: string) => `https://cors-anywhere.herokuapp.com/${url}`,
+    (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+    (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    (url: string) => `https://yacdn.org/proxy/${url}`,
+  ];
+
+  const tryNextProxy = (originalUrl: string) => {
+    if (proxyAttemptRef.current < proxyUrls.length) {
+      const proxyUrl = proxyUrls[proxyAttemptRef.current](originalUrl);
+      proxyAttemptRef.current++;
+      
+      console.log(`尝试代理 ${proxyAttemptRef.current}/${proxyUrls.length}:`, proxyUrl);
+      
+      if (artRef.current) {
+        artRef.current.switchUrl(proxyUrl);
+      }
+      return true;
+    }
+    return false;
+  };
 
   const initPlayer = () => {
     if (artRef.current) {
@@ -24,6 +49,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
       hlsRef.current.destroy();
       hlsRef.current = null;
     }
+
+    // Reset proxy attempt counter
+    proxyAttemptRef.current = 0;
 
     if (playerRef.current && currentUrl) {
       console.log('初始化播放器，链接:', currentUrl);
@@ -141,32 +169,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
 
         artRef.current.on('video:canplay', () => {
           console.log('视频可以播放');
+          // Reset proxy attempt counter on successful load
+          proxyAttemptRef.current = 0;
         });
 
         artRef.current.on('video:error', (error) => {
           console.error('视频播放错误:', error);
-          toast({
-            title: "视频播放错误",
-            description: "当前视频无法播放，请尝试其他集数",
-            variant: "destructive"
-          });
+          
+          // Try next proxy if available
+          if (!tryNextProxy(currentUrl)) {
+            toast({
+              title: "视频播放错误",
+              description: "当前视频无法播放，已尝试所有可用代理，请尝试其他集数",
+              variant: "destructive"
+            });
+          }
         });
 
         artRef.current.on('error', (error) => {
           console.error('播放器错误:', error);
           
-          // 尝试使用代理播放
-          if (!playUrl.includes('proxy')) {
-            console.log('尝试使用代理播放...');
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(currentUrl)}`;
-            
-            if (artRef.current) {
-              artRef.current.switchUrl(proxyUrl);
-            }
-          } else {
+          // Try next proxy if available
+          if (!tryNextProxy(currentUrl)) {
             toast({
               title: "播放错误",
-              description: "视频加载失败，请尝试其他播放源或稍后重试",
+              description: "视频加载失败，已尝试所有可用代理，请尝试其他播放源或稍后重试",
               variant: "destructive"
             });
           }
