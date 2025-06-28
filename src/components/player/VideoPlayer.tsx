@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import Artplayer from 'artplayer';
+import Hls from 'hls.js';
 
 interface VideoPlayerProps {
   currentUrl: string;
@@ -11,10 +12,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
   const { toast } = useToast();
   const playerRef = useRef<HTMLDivElement>(null);
   const artRef = useRef<Artplayer | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
 
   const initPlayer = () => {
     if (artRef.current) {
       artRef.current.destroy();
+    }
+
+    // Clean up previous HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
     }
 
     if (playerRef.current && currentUrl) {
@@ -77,9 +85,47 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
           type: 'auto', // 自动检测视频格式
           customType: {
             m3u8: function(video: HTMLVideoElement, url: string) {
-              // 如果是m3u8格式，尝试直接播放
-              if (url.includes('.m3u8')) {
+              // 使用 hls.js 处理 M3U8 格式
+              if (Hls.isSupported()) {
+                const hls = new Hls({
+                  enableWorker: false,
+                  lowLatencyMode: true,
+                  backBufferLength: 90
+                });
+                
+                hlsRef.current = hls;
+                
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                  console.log('HLS manifest parsed successfully');
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                  console.error('HLS error:', data);
+                  if (data.fatal) {
+                    switch (data.type) {
+                      case Hls.ErrorTypes.NETWORK_ERROR:
+                        console.log('Network error, trying to recover...');
+                        hls.startLoad();
+                        break;
+                      case Hls.ErrorTypes.MEDIA_ERROR:
+                        console.log('Media error, trying to recover...');
+                        hls.recoverMediaError();
+                        break;
+                      default:
+                        console.log('Fatal error, cannot recover');
+                        hls.destroy();
+                        break;
+                    }
+                  }
+                });
+              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari native HLS support
                 video.src = url;
+              } else {
+                console.error('HLS is not supported in this browser');
               }
             }
           }
@@ -126,6 +172,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
           }
         });
 
+        artRef.current.on('destroy', () => {
+          // Clean up HLS instance when player is destroyed
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+            hlsRef.current = null;
+          }
+        });
+
       } catch (error) {
         console.error('播放器初始化失败:', error);
         toast({
@@ -154,6 +208,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ currentUrl }) => {
         } catch (error) {
           console.log('播放器销毁时出错:', error);
         }
+      }
+      
+      // Clean up HLS instance
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
       }
     };
   }, [currentUrl]);
