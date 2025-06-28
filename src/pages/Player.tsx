@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -116,23 +115,20 @@ const Player = () => {
     
     console.log('原始播放链接数据:', playUrl);
     
-    // 解析播放链接格式：线路名$集数$播放地址#集数$播放地址
-    const lines = playUrl.split('$$$');
+    // 解析播放链接格式：集数$播放地址#集数$播放地址
+    const episodes = playUrl.split('#');
     const urls: Array<{name: string, url: string}> = [];
     
-    lines.forEach((line, lineIndex) => {
-      console.log(`处理线路 ${lineIndex + 1}:`, line);
-      const parts = line.split('$');
-      
-      // 跳过线路名，从索引1开始处理集数和链接
-      for (let i = 1; i < parts.length; i += 2) {
-        if (parts[i] && parts[i + 1]) {
-          urls.push({
-            name: `第${parts[i]}集`,
-            url: parts[i + 1].trim()
-          });
-          console.log(`添加集数: 第${parts[i]}集, 链接: ${parts[i + 1].trim()}`);
-        }
+    episodes.forEach((episode, index) => {
+      const parts = episode.split('$');
+      if (parts.length >= 2) {
+        const episodeNum = parts[0];
+        const episodeUrl = parts[1];
+        urls.push({
+          name: `第${episodeNum}集`,
+          url: episodeUrl.trim()
+        });
+        console.log(`添加集数: 第${episodeNum}集, 链接: ${episodeUrl.trim()}`);
       }
     });
     
@@ -216,31 +212,33 @@ const Player = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Header */}
       <div className="bg-black/30 backdrop-blur-md sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center space-x-4">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex items-center space-x-3">
             <Button
               variant="ghost"
               onClick={() => navigate(-1)}
-              className="text-white hover:bg-white/10"
+              className="text-white hover:bg-white/10 p-2"
+              size="sm"
             >
-              <ArrowLeft className="h-4 w-4 mr-2" />
+              <ArrowLeft className="h-4 w-4 mr-1" />
               返回
             </Button>
-            <h1 className="text-xl md:text-2xl font-bold text-white truncate">{movie?.vod_name}</h1>
+            <h1 className="text-lg md:text-xl font-bold text-white truncate">{movie?.vod_name}</h1>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-4 md:py-8">
-        <div className="grid lg:grid-cols-4 gap-6">
-          {/* Player Section */}
-          <div className="lg:col-span-3 space-y-6">
+      <div className="container mx-auto px-3 py-4 max-w-7xl">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Main Content */}
+          <div className="flex-1 space-y-4">
+            {/* Player Section */}
             <Card className="bg-black/50 backdrop-blur-md border-purple-500/20">
               <CardContent className="p-0">
                 <div 
                   ref={playerRef}
-                  className="w-full aspect-video rounded-lg overflow-hidden"
-                  style={{ minHeight: '300px' }}
+                  className="w-full aspect-video rounded-lg overflow-hidden bg-black"
+                  style={{ maxHeight: '70vh' }}
                 ></div>
               </CardContent>
             </Card>
@@ -248,16 +246,18 @@ const Player = () => {
             {/* Episodes */}
             {playUrls.length > 0 && (
               <Card className="bg-white/10 backdrop-blur-md border-purple-500/20">
-                <CardContent className="p-4 md:p-6">
-                  <h3 className="text-white text-lg font-semibold mb-4">选集播放 ({playUrls.length}集)</h3>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2">
+                <CardContent className="p-4">
+                  <h3 className="text-white text-base font-semibold mb-3">
+                    选集播放 ({playUrls.length}集)
+                  </h3>
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
                     {playUrls.map((episode, index) => (
                       <Button
                         key={index}
                         variant={currentUrl === episode.url ? "default" : "ghost"}
                         size="sm"
                         onClick={() => handleEpisodeClick(episode.url)}
-                        className={`text-xs h-8 ${
+                        className={`text-xs h-8 px-2 ${
                           currentUrl === episode.url 
                             ? "bg-purple-600 hover:bg-purple-700 text-white" 
                             : "text-white hover:bg-white/10 border border-purple-500/30"
@@ -272,15 +272,16 @@ const Player = () => {
             )}
           </div>
 
-          {/* Movie Info Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
+          {/* Sidebar */}
+          <div className="w-full lg:w-80 xl:w-96 space-y-4">
+            {/* Movie Info */}
             <Card className="bg-white/10 backdrop-blur-md border-purple-500/20">
-              <CardContent className="p-4 md:p-6">
+              <CardContent className="p-4">
                 <div className="relative mb-4">
                   <img
                     src={movie?.vod_pic || '/placeholder.svg'}
                     alt={movie?.vod_name}
-                    className="w-full h-48 md:h-64 object-cover rounded-lg"
+                    className="w-full h-48 sm:h-56 lg:h-64 object-cover rounded-lg"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       console.log('海报加载失败，使用占位图');
@@ -297,7 +298,9 @@ const Player = () => {
                   )}
                 </div>
                 
-                <h2 className="text-lg md:text-xl font-bold text-white mb-3 leading-tight">{movie?.vod_name}</h2>
+                <h2 className="text-lg font-bold text-white mb-3 leading-tight">
+                  {movie?.vod_name}
+                </h2>
                 
                 <div className="space-y-2 text-sm text-gray-300">
                   <div className="flex items-center space-x-2">
@@ -325,13 +328,13 @@ const Player = () => {
                   {movie?.vod_director && (
                     <div className="flex items-start space-x-2">
                       <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      <span className="break-words">导演: {movie.vod_director}</span>
+                      <span className="break-words text-xs">导演: {movie.vod_director}</span>
                     </div>
                   )}
                   {movie?.vod_actor && (
                     <div className="flex items-start space-x-2">
                       <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                      <span className="break-words">主演: {movie.vod_actor}</span>
+                      <span className="break-words text-xs">主演: {movie.vod_actor}</span>
                     </div>
                   )}
                 </div>
@@ -341,8 +344,8 @@ const Player = () => {
             {/* Description */}
             {movie?.vod_content && (
               <Card className="bg-white/10 backdrop-blur-md border-purple-500/20">
-                <CardContent className="p-4 md:p-6">
-                  <h3 className="text-white text-lg font-semibold mb-3">剧情简介</h3>
+                <CardContent className="p-4">
+                  <h3 className="text-white text-base font-semibold mb-3">剧情简介</h3>
                   <p className="text-gray-300 text-sm leading-relaxed break-words">
                     {movie.vod_content.replace(/<[^>]*>/g, '')}
                   </p>
