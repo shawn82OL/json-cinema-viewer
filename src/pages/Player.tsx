@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -42,7 +41,7 @@ const Player = () => {
     }
     
     return () => {
-      if (artRef.current && !artRef.current.destroyed) {
+      if (artRef.current) {
         artRef.current.destroy();
       }
     };
@@ -111,7 +110,7 @@ const Player = () => {
   };
 
   const initPlayer = () => {
-    if (artRef.current && !artRef.current.destroyed) {
+    if (artRef.current) {
       artRef.current.destroy();
     }
 
@@ -119,7 +118,6 @@ const Player = () => {
       artRef.current = new Artplayer({
         container: playerRef.current,
         url: currentUrl,
-        title: movie?.vod_name || '影片播放',
         volume: 0.5,
         isLive: false,
         muted: false,
